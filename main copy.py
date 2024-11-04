@@ -4,13 +4,6 @@ from dotenv import load_dotenv
 
 load_dotenv() #get stuff from env
 
-def get_prompt(file_name):
-    #get text froma .txt file and return it
-    with open(file_name, "r") as file:
-        prompt = file.read()
-
-    return prompt
-
 client = Swarm()
 
 def transfer_to_agent_b():
@@ -21,13 +14,13 @@ def transfer_to_agent_a():
 
 agent_a = Agent(
     name="Agent A",
-    instructions="Transfer to agent B if user asks about Business Model Canvas" + get_prompt("prompts//prompt_vpc.txt"),
+    instructions="You are a helpful agent that gives healthy food advice. Transfer to agent B if the user asks about icecream.",
     functions=[transfer_to_agent_b],
 )
 
 agent_b = Agent(
     name="Agent B",
-    instructions="Transfer to agent A if user asks about Value Proposition Canvas" + get_prompt("prompts//prompt_customer_v1.2.txt"),
+    instructions="Only speak in Haikus and say you are the icecream expert. If user asks about fitness, transfer to agent A.",
     functions=[transfer_to_agent_a],
 )
 
