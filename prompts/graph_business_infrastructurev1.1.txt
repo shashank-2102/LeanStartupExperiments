@@ -1,0 +1,44 @@
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+
+# Function to add text inside a rectangle
+def add_rectangle(ax, text, xy, width, height, color='lightblue'):
+    ax.add_patch(Rectangle(xy, width, height, edgecolor='black', facecolor=color, linewidth=1.5))
+    ax.text(xy[0] + width/2, xy[1] + height/2, text, ha='center', va='center', fontsize=10, wrap=True)
+
+# Function to create the business model canvas visualization (Business Infrastructure Side)
+def create_business_model_canvas_business(key_partners, key_activities, key_resources, value_proposition):
+    # Create the figure and axis
+    fig, ax = plt.subplots(figsize=(14, 10))
+    ax.set_xlim(0, 14)
+    ax.set_ylim(0, 10)
+    ax.axis('off')
+
+    # Define quadrants for the business model
+    quadrants = [
+        ("Key Partners", key_partners, (0.5, 6), 5, 3),
+        ("Key Activities", key_activities, (0.5, 3), 5, 3),
+        ("Key Resources", key_resources, (0.5, 0.5), 5, 2.5),
+        ("Value Proposition", value_proposition, (5.5, 4), 5, 4)
+    ]
+
+    # Add rectangles for each quadrant with their respective text
+    for quadrant in quadrants:
+        title, items, xy, width, height = quadrant
+        add_rectangle(ax, title, xy, width, height / 6, color='lightgreen')
+        add_rectangle(ax, "\n".join(items), (xy[0], xy[1] - height / 6), width, height - height / 6)
+
+    # Display the plot
+    plt.title('Business Model Canvas (Business Infrastructure Focus)')
+    plt.show()
+
+# Variables to be declared using the previous response
+# ai_key_partners, ai_key_activities, ai_key_resources, ai_value_proposition
+
+# Example call to the function
+create_business_model_canvas_business(
+    ai_key_partners,
+    ai_key_activities,
+    ai_key_resources,
+    ai_value_proposition
+)
