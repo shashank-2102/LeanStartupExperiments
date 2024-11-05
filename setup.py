@@ -108,7 +108,7 @@ if prompt := st.chat_input("What would you like to know about Lean Startup metho
         summariser = Agent(
         name="summariser",
         instructions=f"Summarise the {content} in at most 300 words",
-        functions=[transfer_to_agent_a],)
+        )
 
         response = client.run(
             agent=summariser,
