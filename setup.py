@@ -91,12 +91,14 @@ if prompt := st.chat_input("What would you like to know about Lean Startup metho
             context_variables={},
         )
     
+    placeholder = response.messages[-1]["content"]
+
     # Update current agent if handoff occurred
     st.session_state.current_agent = response.agent
     
     # Display assistant response
     with st.chat_message("assistant"):
-        st.write(response.messages[-1]["content"])
+        st.write(placeholder)
 
     def summary(content):
 
