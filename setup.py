@@ -6,12 +6,15 @@ from dotenv import load_dotenv
 def get_prompt(file_name):
     """Get text from a .txt file and return it"""
     try:
-        with open(file_name, "r") as file:
+        prompts_dir = os.path.join(os.path.dirname(__file__), 'prompts')
+        file_path = os.path.join(prompts_dir, file_name)
+        with open(file_path, "r") as file:
             prompt = file.read()
         return prompt
     except FileNotFoundError:
         st.error(f"Prompt file not found: {file_name}")
         return ""
+
 
 def init_session_state():
     """Initialize session state variables"""
@@ -33,14 +36,14 @@ def transfer_to_agent_a():
 agent_a = Agent(
     name="Agent A",
     instructions="Transfer to agent B if user asks about Business Model Canvas" + 
-                get_prompt("prompts/prompt_vpc.txt"),
+                get_prompt("prompt_vpc.txt"),
     functions=[transfer_to_agent_b],
 )
 
 agent_b = Agent(
     name="Agent B",
     instructions="Transfer to agent A if user asks about Value Proposition Canvas" + 
-                get_prompt("prompts/BMC_combined_3Rs_structure.txt"),
+                get_prompt("BMC_combined_3Rs_structure.txt"),
     functions=[transfer_to_agent_a],
 )
 
