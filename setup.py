@@ -36,7 +36,7 @@ def transfer_to_agent_a():
 agent_a = Agent(
     name="Agent A",
     instructions="Transfer to agent B if user asks about Business Model Canvas" + 
-                get_prompt("prompt_vpc.txt"),
+                get_prompt("prompt_VPC.txt"),
     functions=[transfer_to_agent_b],
 )
 
