@@ -3,15 +3,15 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv() #get stuff from env
+client = Swarm()
 
 def get_prompt(file_name):
-    #get text froma .txt file and return it
-    with open(file_name, "r") as file:
+    #get text from .txt file and return it
+    prompts_dir = os.path.join(os.path.dirname(__file__), 'prompts')
+    file_path = os.path.join(prompts_dir, file_name)
+    with open(file_path, "r") as file:
         prompt = file.read()
-
     return prompt
-
-client = Swarm()
 
 def transfer_to_agent_b():
     return agent_b
@@ -21,13 +21,13 @@ def transfer_to_agent_a():
 
 agent_a = Agent(
     name="Agent A",
-    instructions="Transfer to agent B if user asks about Business Model Canvas" + get_prompt("prompts//prompt_vpc.txt"),
+    instructions="Transfer to agent B if user asks about Business Model Canvas" + get_prompt("prompt_vpc.txt"),
     functions=[transfer_to_agent_b],
 )
 
 agent_b = Agent(
     name="Agent B",
-    instructions="Transfer to agent A if user asks about Value Proposition Canvas" + get_prompt("prompts//prompt_customer_v1.2.txt"),
+    instructions="Transfer to agent A if user asks about Value Proposition Canvas" + get_prompt("prompt_customer_v1.2.txt"),
     functions=[transfer_to_agent_a],
 )
 
