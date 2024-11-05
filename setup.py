@@ -16,7 +16,8 @@ def get_prompt(file_name):
 def init_session_state():
     """Initialize session state variables"""
     if 'messages' not in st.session_state:
-        st.session_state.messages = [{"role": "user", "content": "Hi"}]
+        # st.session_state.messages = [{"role": "user", "content": "Hi"}]
+        st.session_state.messages = []
     if 'current_agent' not in st.session_state:
         st.session_state.current_agent = None
     if 'client' not in st.session_state:
@@ -32,78 +33,93 @@ def transfer_to_agent_a():
 agent_a = Agent(
     name="Agent A",
     instructions="Transfer to agent B if user asks about Business Model Canvas" + 
-                get_prompt("prompts//prompt_vpc.txt"),
+                get_prompt("prompts/prompt_vpc.txt"),
     functions=[transfer_to_agent_b],
 )
 
 agent_b = Agent(
     name="Agent B",
     instructions="Transfer to agent A if user asks about Value Proposition Canvas" + 
-                get_prompt("prompts//prompt_customer_v1.2.txt"),
+                get_prompt("prompts/BMC_combined_3Rs_structure.txt"),
     functions=[transfer_to_agent_a],
 )
 
 
-def main():
-    st.title("Lean Startup Assistant")
-    
-    # Load environment variables
-    load_dotenv()
-    
-    # Initialize session state
-    init_session_state()
-    
+st.title("Lean Startup Assistant")
 
-    
-    # Initialize current agent if not set
-    if st.session_state.current_agent is None:
-        st.session_state.current_agent = agent_a
-        # Get initial response
-        if len(st.session_state.messages) == 1:  # Only the initial "Hi" message
-            response = st.session_state.client.run(
-                agent=agent_a,
-                messages=st.session_state.messages,
-                context_variables={}
-            )
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": response.messages[-1]["content"]
-            })
+# Load environment variables
+load_dotenv()
 
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+# Initialize session state
+init_session_state()
 
-    # Chat input
-    if prompt := st.chat_input("What would you like to know about Lean Startup methodology?"):
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Display user message
-        with st.chat_message("user"):
-            st.write(prompt)
 
-        # Get bot response
-        with st.spinner('Thinking...'):
-            response = st.session_state.client.run(
-                agent=st.session_state.current_agent,
-                messages=st.session_state.messages,
-                context_variables={},
-            )
-        
-        # Update current agent if handoff occurred
-        st.session_state.current_agent = response.agent
-        
-        # Display assistant response
-        with st.chat_message("assistant"):
-            st.write(response.messages[-1]["content"])
-        
-        # Add assistant response to chat history
+# Initialize current agent if not set
+if st.session_state.current_agent is None:
+    st.session_state.current_agent = agent_a
+    # Get initial response
+    if len(st.session_state.messages) == 1:  # Only the initial "Hi" message
+        response = st.session_state.client.run(
+            agent=agent_a,
+            messages=st.session_state.messages,
+            context_variables={}
+        )
         st.session_state.messages.append({
             "role": "assistant",
             "content": response.messages[-1]["content"]
         })
+
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+# Chat input
+if prompt := st.chat_input("What would you like to know about Lean Startup methodology?"):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Display user message
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    # Get bot response
+    with st.spinner('Thinking...'):
+        response = st.session_state.client.run(
+            agent=st.session_state.current_agent,
+            messages=st.session_state.messages,
+            context_variables={},
+        )
+    
+    # Update current agent if handoff occurred
+    st.session_state.current_agent = response.agent
+    
+    # Display assistant response
+    with st.chat_message("assistant"):
+        st.write(response.messages[-1]["content"])
+
+    def summary(content):
+
+        client = Swarm()
+
+        summariser = Agent(
+        name="summariser",
+        instructions=f"Summarise the {content} in at most 300 words",
+        functions=[transfer_to_agent_a],)
+
+        response = client.run(
+            agent=summariser,
+            messages=[{"role": "user", "content": "call summariser"}],
+        )
+
+        return response.messages[-1]["content"]
+
+    
+    # Add assistant response to chat history
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": summary(response.messages[-1]["content"])
+    })
 
     # Add a sidebar with information
     with st.sidebar:
@@ -121,5 +137,3 @@ def main():
             st.session_state.current_agent = agent_a
             st.experimental_rerun()
 
-if __name__ == "__main__":
-    main()
