@@ -43,7 +43,7 @@ def run_agent(agent_name, input_message, messages=messages, context_variables=co
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=messages,
-            temperature=0.7,
+            temperature=0.9,
             max_tokens=250,
         )
     except Exception as e:
@@ -57,7 +57,7 @@ def conversation_loop():
     print("Starting conversation. Type 'quit' to exit.\n")
     
     while True:
-        #print(f"Messages {messages}")
+        print(f"Messages {messages}")
     
         user_input = input("User: ").strip()
         if user_input.lower() == "quit":
