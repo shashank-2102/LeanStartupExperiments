@@ -143,7 +143,7 @@ def sidebar_settings():
         openai_key = st.text_input("OpenAI API Key:", type="password", 
                                   value=os.getenv("OPENAI_API_KEY", ""))
         tavily_key = st.text_input("Tavily API Key:", type="password", 
-                                  value=os.getenv("TAVILY_API_KEY", ""))
+                                  value=os.getenv("TAVILY_API_KEY", "")) #use openai websearch
         
         init_button = st.button("Initialize Chatbot", type="primary")
         
