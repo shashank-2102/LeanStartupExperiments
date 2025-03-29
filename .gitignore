@@ -7,6 +7,7 @@ __pycache__/
 *.so
 
 .streamlit/*
+.streamlit/secrets.toml
 
 # Distribution / packaging
 .Python
