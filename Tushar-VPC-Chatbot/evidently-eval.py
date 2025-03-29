@@ -15,12 +15,13 @@ from office365.graph_client import GraphClient
 import sys
 from dotenv import load_dotenv
 import json
+import os
 
 load_dotenv()
+EVIDENTLY_API_TOKEN = os.getenv("EVIDENTLY_API_TOKEN")
+ws = CloudWorkspace(token=EVIDENTLY_API_TOKEN, url="https://app.evidently.cloud")
 
-# ws = CloudWorkspace(token="YOUR_API_TOKEN", url="https://app.evidently.cloud/projects/0195b4cf-4354-724c-bccb-9e6cacb57f30")
-
-# project = ws.get_project("0195b4cf-4354-724c-bccb-9e6cacb57f30")
+project = ws.get_project("0195b4cf-4354-724c-bccb-9e6cacb57f30")
 
 eval_df = pd.read_csv("data/Langchain Test Prompts(VPC agent langchain).csv", encoding='latin1')
 eval_df['context'] = "user should receive a full response giving them all elements of value proposition canvas"
@@ -37,12 +38,15 @@ descriptors=[
 
 eval_dataset = eval_dataset.as_dataframe()
 
+# print(eval_dataset.head())
 report = Report([
     TextEvals(),
     MinValue(column="Sentiment", tests=[gte(0)]),
     MaxValue(column="Length", tests=[lte(150)]),
     CategoryCount(column="Denials", category="DECLINE", tests=[eq(0)])
 ])
+my_eval = report.run(eval_dataset, None)
 
+ws.add_run(project.id, my_eval, include_data=True)
 # print(json.dumps(report.run(eval_dataset, None).json(), indent=4))
 
