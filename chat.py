@@ -44,9 +44,9 @@ def clear_chat_history(agent_name):
         st.session_state.chat_history[agent_name] = []
         
         # Save empty chat history to database
-        if st.session_state.authenticated and st.session_state.username:
-            db_manager.save_chat_history(
-                st.session_state.username,
-                agent_name,
-                []
-            )
+        # if st.session_state.authenticated and st.session_state.username:
+        #     db_manager.save_chat_history(
+        #         st.session_state.username,
+        #         agent_name,
+        #         []
+        #     )

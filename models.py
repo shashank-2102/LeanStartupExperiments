@@ -3,8 +3,11 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 import os
 import json
-import pickle
-import base64
+import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Create a base class for declarative models
 Base = declarative_base()
@@ -52,38 +55,44 @@ class Config(Base):
     value = Column(Text)
 
 # Database connection and session management
-db_url = os.environ.get('DATABASE_URL')
-if not db_url:
-    db_url = 'sqlite:///multi_agent_chatbot.db'
+def get_db_url():
+    """Get database URL from environment variables for Neon.tech PostgreSQL"""
+    # Check for Neon.tech specific environment variables
+    db_user = os.environ.get('NEON_DB_USER')
+    db_password = os.environ.get('NEON_DB_PASSWORD')
+    db_host = os.environ.get('NEON_DB_HOST')
+    db_name = os.environ.get('NEON_DB_NAME', 'neondb')
+    
+    # Construct PostgreSQL connection URL
+    if db_user and db_password and db_host:
+        return f'postgresql://{db_user}:{db_password}@{db_host}/{db_name}'
+    
+    # Fallback to DATABASE_URL if set
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        return db_url
+    
+    # If no database URL is found, raise an error
+    raise ValueError("No PostgreSQL connection details found. Please set the NEON_DB_* environment variables.")
 
-# If db_url starts with postgresql but you're having issues, use SQLite instead
-if db_url and db_url.startswith('postgresql'):
-    print("Using SQLite instead of PostgreSQL due to connection issues")
-    db_url = 'sqlite:///multi_agent_chatbot.db'
+# Get the database URL
+db_url = get_db_url()
 
-# Create engine with appropriate parameters based on database type
-if db_url.startswith('sqlite'):
-    # SQLite specific configuration
-    engine = create_engine(
-        db_url,
-        connect_args={"check_same_thread": False},  # Allows multiple threads to access SQLite
-        pool_pre_ping=True,
-        pool_recycle=300
-    )
-else:
-    # PostgreSQL or other database configuration
-    engine = create_engine(
-        db_url,
-        pool_pre_ping=True,  # Check connection before use
-        pool_recycle=300,    # Recycle connections every 5 minutes
-        pool_timeout=30,     # Connection timeout 
-        max_overflow=10,     # Allow up to 10 connections beyond pool_size
-        pool_size=5,         # Maintain a pool of 5 connections
-        connect_args={
-            "connect_timeout": 10,  # Connection timeout in seconds
-            "application_name": "Multi-Agent-Chatbot" # Identify application in database logs
-        }
-    )
+# Configure PostgreSQL engine with appropriate settings for Neon.tech
+engine = create_engine(
+    db_url,
+    pool_pre_ping=True,  # Check connection before use
+    pool_recycle=300,    # Recycle connections every 5 minutes
+    pool_timeout=30,     # Connection timeout
+    max_overflow=5,      # Allow up to 5 connections beyond pool_size
+    pool_size=3,         # Maintain a smaller pool for serverless environments
+    echo=False,          # Set to True for debugging SQL queries
+    connect_args={
+        "connect_timeout": 10,  # Connection timeout in seconds
+        "application_name": "Multi-Agent-Chatbot", # Identify application in database logs
+        "sslmode": "require"    # Require SSL for Neon.tech connections
+    }
+)
 
 Session = sessionmaker(bind=engine)
 
@@ -93,16 +102,26 @@ def setup_database():
     session = None
     
     # Create all tables - use try/except to handle connection issues
-    try:
-        # Create tables if they don't exist
-        Base.metadata.create_all(engine, checkfirst=True)
-    except Exception as e:
-        print(f"Error setting up database tables: {e}")
-        return
-        
-    # Continue with rest of setup
+    max_retries = 5
+    retry_delay = 1  # Initial delay in seconds
     
-    # Create session and add initial data with error handling
+    for attempt in range(max_retries):
+        try:
+            # Create tables if they don't exist
+            Base.metadata.create_all(engine, checkfirst=True)
+            print(f"Successfully created database tables on attempt {attempt+1}")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Error setting up database tables (attempt {attempt+1}/{max_retries}): {e}")
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                print(f"Failed to set up database after {max_retries} attempts: {e}")
+                raise  # Re-raise the exception after all retries have failed
+    
+    # Continue with rest of setup
     try:
         # Create a new session
         session = Session()
@@ -116,6 +135,7 @@ def setup_database():
                 role='admin'
             )
             session.add(admin_user)
+            print("Created admin user")
         
         # Check if default agents exist
         if session.query(Agent).count() == 0:
@@ -138,15 +158,20 @@ def setup_database():
             ]
             for agent in default_agents:
                 session.add(agent)
+            print("Created default agents")
         
         # Check if config exists (for OpenAI API key)
         config = session.query(Config).filter_by(key='openai_api_key').first()
         if not config:
-            config = Config(key='openai_api_key', value='')
+            # Try to get from environment first
+            openai_api_key = os.environ.get('OPENAI_API_KEY', '')
+            config = Config(key='openai_api_key', value=openai_api_key)
             session.add(config)
+            print("Initialized API key configuration")
         
         # Commit all changes
         session.commit()
+        print("Database initialization successful")
     except Exception as e:
         print(f"Error initializing database data: {e}")
         if session:
@@ -155,17 +180,3 @@ def setup_database():
         # Close session
         if session:
             session.close()
-
-def encode_pickle(obj):
-    """Convert a Python object to a base64 encoded string"""
-    pickled = pickle.dumps(obj)
-    return base64.b64encode(pickled).decode('utf-8')
-
-def decode_pickle(encoded_str):
-    """Convert a base64 encoded string back to a Python object"""
-    if not encoded_str:
-        return None
-    try:
-        return pickle.loads(base64.b64decode(encoded_str.encode('utf-8')))
-    except:
-        return None

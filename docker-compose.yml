@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  chatbot:
+    build: .
+    restart: always
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - NEON_DB_USER=neondb_owner
+      - NEON_DB_PASSWORD=npg_KsX5PgHb6SIc
+      - NEON_DB_HOST=ep-quiet-brook-a4nfwari-pooler.us-east-1.aws.neon.tech
+      - NEON_DB_NAME=neondb
+      - OPENAI_API_KEY=sk-XTHKFxTEvOk7JTpKPCXfcUVV-zTsiMZO898_NgrsB6T3BlbkFJ-gLSe8OaT55NQHAMul5sXxzINLgdocAqV9sQQdESIA
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+    volumes:
+      - .:/app
