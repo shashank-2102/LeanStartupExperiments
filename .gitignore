@@ -6,6 +6,19 @@ __pycache__/
 # C extensions
 *.so
 
+# Environment variables
+.env
+*.env
+
+# Local configuration
+config.local.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
 # Distribution / packaging
 .Python
 build/
