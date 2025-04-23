@@ -17,11 +17,11 @@ pip install streamlit sqlalchemy psycopg2-binary python-dotenv openai
 Create a `.env` file in your project root directory with all required database credentials:
 
 ```
-NEON_DB_USER=neondb_owner
-NEON_DB_PASSWORD=npg_KsX5PgHb6SIc
-NEON_DB_HOST=ep-quiet-brook-a4nfwari-pooler.us-east-1.aws.neon.tech
-NEON_DB_NAME=neondb
-OPENAI_API_KEY=sk-XTHKFxTEvOk7JTpKPCXfcUVV-zTsiMZO898_NgrsB6T3BlbkFJ-gLSe8OaT55NQHAMul5sXxzINLgdocAqV9sQQdESIA
+NEON_DB_USER=your_db_user
+NEON_DB_PASSWORD=your_db_password
+NEON_DB_HOST=your_db_host
+NEON_DB_NAME=your_db_name
+OPENAI_API_KEY=your_openai_api_key
 ```
 
 ### 3. Replace Key Files
