@@ -1,10 +1,12 @@
-from sqlalchemy import Column, String, Integer, Text, ForeignKey, create_engine, MetaData, JSON
+from sqlalchemy import Column, String, Integer, Text, ForeignKey, create_engine, MetaData, JSON, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 import os
 import json
 import time
 from dotenv import load_dotenv
+import datetime
+import uuid
 
 # Load environment variables from .env file
 load_dotenv()
@@ -41,12 +43,13 @@ class ChatHistory(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     agent_id = Column(Integer, ForeignKey('agents.id'), nullable=False)
+    conversation_id = Column(String(36), default=lambda: str(uuid.uuid4()))  # Default generates a UUID
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
     messages = Column(JSON, default=list)
     
     # Many-to-one relationships
     user = relationship("User", back_populates="chats")
     agent = relationship("Agent", back_populates="chats")
-
 class Config(Base):
     __tablename__ = 'config'
     

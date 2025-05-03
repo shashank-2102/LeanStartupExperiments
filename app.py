@@ -28,12 +28,15 @@ if "authenticated" not in st.session_state:
     st.session_state.role = None
     st.session_state.page = "chat"
     st.session_state.current_agent = None
-    st.session_state.chat_history = {}
+    st.session_state.chat_history = {}  # Will store {agent_name: {conv_id: messages}}
     st.session_state.show_agent_recommendation = False
     st.session_state.show_api_key_panel = False
-    st.session_state.debug_mode = False  # Add debug mode flag
-    st.session_state.waiting_for_response = False  # Track if we're waiting for a response
-    st.session_state.new_message = None  # For storing new messages temporarily
+    st.session_state.debug_mode = False
+    st.session_state.waiting_for_response = False
+    st.session_state.new_message = None
+    
+if "current_conversation_id" not in st.session_state:
+    st.session_state.current_conversation_id = {}  # Will store {agent_name: conv_id}
 
 # Initialize the database
 try:
@@ -42,6 +45,7 @@ except Exception as e:
     st.error(f"Error setting up database: {e}")
     st.info("Please make sure the database credentials are correctly set in the environment variables.")
     st.code(traceback.format_exc())
+
 
 # Application header and sidebar
 def render_sidebar():
@@ -87,11 +91,55 @@ def render_sidebar():
                     selected_agent = next((a for a in agents if a["name"] == current_agent), None)
                     if selected_agent:
                         st.markdown(f"**{selected_agent['description']}**")
-                        
-                    # Clear chat button
-                    if st.button("Clear Chat"):
-                        chat.clear_chat_history(st.session_state.current_agent)
+                    
+                    # Conversation management - add this here
+                    st.subheader("Conversations")
+                    
+                    # New conversation button
+                    if st.button("New Conversation"):
+                        new_id = generate_conversation_id()
+                        st.session_state.current_conversation_id[current_agent] = new_id
+                        if current_agent not in st.session_state.chat_history:
+                            st.session_state.chat_history[current_agent] = {}
+                        st.session_state.chat_history[current_agent][new_id] = []
                         st.rerun()
+                    
+                    # List of existing conversations
+                    conversations = db_manager.get_conversations(
+                        st.session_state.username, 
+                        current_agent
+                    )
+
+                    if conversations:
+                        st.write("Select a previous conversation:")
+                        
+                        for idx, conv in enumerate(conversations):
+                            # Format date and show preview
+                            created_date = conv.get('created_at', 'Unknown date')
+                            if isinstance(created_date, str) and len(created_date) > 16:
+                                # Format as dd-mm-yy hh:mm
+                                try:
+                                    from datetime import datetime
+                                    # Parse the ISO format string
+                                    dt = datetime.fromisoformat(created_date.replace('Z', '+00:00'))
+                                    # Format as dd-mm-yy hh:mm
+                                    created_date = dt.strftime('%d-%m-%y %H:%M')
+                                except:
+                                    # Fallback in case of parsing error
+                                    created_date = created_date[:16].replace('T', ' ')
+                            
+                            msg_count = conv.get('message_count', 0)
+                            conv_label = f"{created_date} ({msg_count} messages)"
+                            
+                            if st.button(conv_label, key=f"conv_{idx}"):
+                                st.session_state.current_conversation_id[current_agent] = conv['conversation_id']
+                                # The actual messages will be loaded in the next step
+                                st.rerun()
+                    
+                    # Clear chat button
+                    # if st.button("Clear Chat"):
+                    #     chat.clear_chat_history(st.session_state.current_agent)
+                    #     st.rerun()
                         
                     # Show agent recommendations toggle
                     st.session_state.show_agent_recommendation = st.toggle(
@@ -123,7 +171,7 @@ def render_sidebar():
             st.info("Please login or register to continue.")
 
 # Function to process user input and get agent response
-def process_message(user_input, agent_chat_history):
+def process_message(user_input, agent_chat_history, conversation_id):
     # Add user message to chat history first - this will be displayed immediately
     agent_chat_history.append({"role": "user", "content": user_input})
     
@@ -149,6 +197,7 @@ def process_message(user_input, agent_chat_history):
                 save_success = db_manager.save_chat_history(
                     st.session_state.username,
                     st.session_state.current_agent,
+                    conversation_id,  # Include conversation ID here
                     agent_chat_history
                 )
                 
@@ -175,6 +224,12 @@ def process_message(user_input, agent_chat_history):
             return traceback.format_exc()
         
         return None
+    
+# Add this function to generate new conversation IDs
+def generate_conversation_id():
+    """Generate a unique conversation ID"""
+    import uuid
+    return str(uuid.uuid4())
 
 # Main application
 def main():
@@ -229,12 +284,60 @@ def render_chat_page():
                     st.session_state.show_api_key_panel = False
                     st.rerun()
     
-    # Initialize chat history for the current agent if it doesn't exist
-    if st.session_state.current_agent not in st.session_state.chat_history:
-        st.session_state.chat_history[st.session_state.current_agent] = []
+    # Initialize current agent and ensure it exists in the session state
+    current_agent = st.session_state.current_agent
+    if not current_agent:
+        st.warning("No agent selected. Please select an agent from the sidebar.")
+        return
     
-    # Get chat history for the current agent
-    agent_chat_history = st.session_state.chat_history.get(st.session_state.current_agent, [])
+    # Initialize conversation ID for this agent if needed
+    if current_agent not in st.session_state.current_conversation_id:
+        st.session_state.current_conversation_id[current_agent] = generate_conversation_id()
+    current_conv_id = st.session_state.current_conversation_id[current_agent]
+    
+    # Initialize chat history structure
+    if current_agent not in st.session_state.chat_history:
+        st.session_state.chat_history[current_agent] = {}
+    
+    if not isinstance(st.session_state.chat_history[current_agent], dict):
+        # Fix if it was incorrectly initialized as a list
+        old_history = st.session_state.chat_history[current_agent]
+        st.session_state.chat_history[current_agent] = {current_conv_id: old_history if isinstance(old_history, list) else []}
+        
+    # Now we can safely access or create the conversation
+    if current_conv_id not in st.session_state.chat_history[current_agent]:
+        # Try to load from database first
+        try:
+            loaded_history = db_manager.load_chat_history(st.session_state.username)
+            
+            # Check if we have this conversation in loaded history
+            if (current_agent in loaded_history and 
+                isinstance(loaded_history[current_agent], dict) and
+                current_conv_id in loaded_history[current_agent] and
+                'messages' in loaded_history[current_agent][current_conv_id]):
+                # Extract messages from the structure
+                messages = loaded_history[current_agent][current_conv_id]['messages']
+                st.session_state.chat_history[current_agent][current_conv_id] = messages if isinstance(messages, list) else []
+            else:
+                # Initialize empty list for this conversation
+                st.session_state.chat_history[current_agent][current_conv_id] = []
+        except Exception as e:
+            st.error(f"Error loading chat history: {e}")
+            st.session_state.chat_history[current_agent][current_conv_id] = []
+    
+    # Get chat history for the current agent and conversation
+    agent_chat_history = st.session_state.chat_history[current_agent][current_conv_id]
+
+    # Ensure agent_chat_history is a list of message dictionaries
+    if not isinstance(agent_chat_history, list):
+        # If it's the object with 'messages' field, extract it
+        if isinstance(agent_chat_history, dict) and 'messages' in agent_chat_history:
+            agent_chat_history = agent_chat_history['messages']
+        # If it's something else or extraction failed, initialize as empty list
+        if not isinstance(agent_chat_history, list):
+            agent_chat_history = []
+        # Update the session state
+        st.session_state.chat_history[current_agent][current_conv_id] = agent_chat_history
     
     # Create a container for the chat messages
     chat_container = st.container()
@@ -255,6 +358,7 @@ def render_chat_page():
             st.write(f"Username: {st.session_state.username}")
             st.write(f"Role: {st.session_state.role}")
             st.write(f"Current Agent: {st.session_state.current_agent}")
+            st.write(f"Current Conversation ID: {current_conv_id}")
             
             st.subheader("Chat History")
             st.write(f"Messages in current chat: {len(agent_chat_history)}")
@@ -265,7 +369,10 @@ def render_chat_page():
     # Check if there's a new message in the session state
     if st.session_state.new_message is not None:
         # Process the message
-        debug_info = process_message(st.session_state.new_message, agent_chat_history)
+        debug_info = process_message(
+            st.session_state.new_message, 
+            agent_chat_history, 
+            current_conv_id)  # Pass conversation ID here
         
         # Clear the new message
         st.session_state.new_message = None

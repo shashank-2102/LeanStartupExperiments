@@ -39,14 +39,19 @@ def format_message_content(content):
         st.write(content)
 
 def clear_chat_history(agent_name):
-    """Clear chat history for a specific agent"""
+    """Clear chat history for a specific agent and current conversation"""
     if agent_name in st.session_state.chat_history:
-        st.session_state.chat_history[agent_name] = []
-        
-        # Save empty chat history to database
-        # if st.session_state.authenticated and st.session_state.username:
-        #     db_manager.save_chat_history(
-        #         st.session_state.username,
-        #         agent_name,
-        #         []
-        #     )
+        # Get current conversation ID
+        current_conv_id = st.session_state.current_conversation_id.get(agent_name)
+        if current_conv_id and current_conv_id in st.session_state.chat_history[agent_name]:
+            # Clear just the current conversation
+            st.session_state.chat_history[agent_name][current_conv_id] = []
+            
+            # Save empty chat history to database
+            if st.session_state.authenticated and st.session_state.username:
+                db_manager.save_chat_history(
+                    st.session_state.username,
+                    agent_name,
+                    current_conv_id,
+                    []
+                )

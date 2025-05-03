@@ -214,9 +214,9 @@ def add_agent(agent_data):
         return False
 
 # Chat history functions
-def save_chat_history(username, agent_name, chat_history):
-    """Save chat history for a user and agent"""
-    def _save_chat_history(username, agent_name, chat_history):
+def save_chat_history(username, agent_name, conversation_id, chat_history):
+    """Save chat history for a user, agent, and specific conversation"""
+    def _save_chat_history(username, agent_name, conversation_id, chat_history):
         session = Session()
         try:
             # Get user and agent
@@ -228,13 +228,10 @@ def save_chat_history(username, agent_name, chat_history):
                 return False
             
             # Make sure chat_history is JSON serializable
-            # This is important for PostgreSQL's JSON column
             try:
-                # Test JSON serialization
                 json.dumps(chat_history)
             except (TypeError, OverflowError) as e:
                 print(f"Error serializing chat history: {e}")
-                # Create a safe copy of the chat history
                 safe_chat_history = []
                 for msg in chat_history:
                     safe_msg = {
@@ -244,32 +241,26 @@ def save_chat_history(username, agent_name, chat_history):
                     safe_chat_history.append(safe_msg)
                 chat_history = safe_chat_history
             
-            # Check if chat history already exists
+            # Check if chat history for this conversation already exists
             existing_chat = session.query(ChatHistory).filter_by(
-                user_id=user.id, agent_id=agent.id
+                user_id=user.id, agent_id=agent.id, conversation_id=conversation_id
             ).first()
-            
-            # Log for debugging
-            print(f"Saving chat history for {username} with agent {agent_name}")
-            print(f"Chat entries: {len(chat_history)}")
             
             if existing_chat:
                 # Update existing chat history
                 existing_chat.messages = chat_history
-                print(f"Updated existing chat history (ID: {existing_chat.id})")
             else:
-                # Create new chat history
+                # Create new chat history entry
                 new_chat = ChatHistory(
                     user_id=user.id,
                     agent_id=agent.id,
+                    conversation_id=conversation_id,
                     messages=chat_history
                 )
                 session.add(new_chat)
-                print(f"Created new chat history entry")
             
             # Commit changes
             session.commit()
-            print(f"Successfully committed chat history to database")
             return True
         except Exception as e:
             session.rollback()
@@ -279,7 +270,7 @@ def save_chat_history(username, agent_name, chat_history):
             session.close()
     
     try:
-        return execute_with_retry(_save_chat_history, username, agent_name, chat_history)
+        return execute_with_retry(_save_chat_history, username, agent_name, conversation_id, chat_history)
     except Exception as e:
         print(f"Failed to save chat history after retries: {e}")
         return False
@@ -298,13 +289,112 @@ def load_chat_history(username):
             # Get all chat histories for this user
             chat_histories = session.query(ChatHistory, Agent).join(Agent).filter(
                 ChatHistory.user_id == user.id
-            ).all()
+            ).order_by(ChatHistory.created_at.desc()).all()
             
-            # Convert to dictionary of agent_name: messages
+            # Convert to nested dictionary: agent_name -> conversation_id -> messages
             result = {}
             for chat, agent in chat_histories:
-                result[agent.name] = chat.messages
-                print(f"Loaded {len(chat.messages)} messages for {username} with agent {agent.name}")
+                if agent.name not in result:
+                    result[agent.name] = {}
+                
+                result[agent.name][chat.conversation_id] = {
+                    'messages': chat.messages,
+                    'created_at': chat.created_at.isoformat() if chat.created_at else None
+                }
+            
+            return result
+        finally:
+            session.close()
+    
+    try:
+        return execute_with_retry(_load_chat_history, username)
+    except Exception as e:
+        print(f"Failed to load chat history: {e}")
+        return {}
+
+def get_conversations(username, agent_name):
+    """Get list of conversations for a user and agent"""
+    def _get_conversations(username, agent_name):
+        session = Session()
+        try:
+            # Get user and agent
+            user = session.query(User).filter_by(username=username).first()
+            agent = session.query(Agent).filter_by(name=agent_name).first()
+            
+            if not user or not agent:
+                return []
+            
+            # Try to get conversations with conversation_id field
+            try:
+                # Get all conversations for this user and agent
+                conversations = session.query(ChatHistory).filter_by(
+                    user_id=user.id, agent_id=agent.id
+                ).all()
+                
+                # Convert to list of dicts with conversation_id and created_at
+                return [{
+                    'conversation_id': getattr(conv, 'conversation_id', 'default'),
+                    'created_at': getattr(conv, 'created_at', None).isoformat() if getattr(conv, 'created_at', None) else None,
+                    'message_count': len(conv.messages) if hasattr(conv, 'messages') and conv.messages else 0
+                } for conv in conversations]
+            except Exception as e:
+                print(f"Error fetching conversations with new schema: {e}")
+                # Fallback for older database schema
+                return [{
+                    'conversation_id': 'default',
+                    'created_at': None,
+                    'message_count': 0
+                }]
+        finally:
+            session.close()
+    
+    try:
+        return execute_with_retry(_get_conversations, username, agent_name)
+    except Exception as e:
+        print(f"Failed to get conversations: {e}")
+        return []
+
+def load_chat_history(username):
+    """Load chat history for a user"""
+    def _load_chat_history(username):
+        session = Session()
+        try:
+            # Get user
+            user = session.query(User).filter_by(username=username).first()
+            if not user:
+                print(f"User {username} not found when loading chat history")
+                return {}
+            
+            # Get all chat histories for this user
+            chat_histories = session.query(ChatHistory, Agent).join(Agent).filter(
+                ChatHistory.user_id == user.id
+            ).all()
+            
+            # Convert to nested dictionary: agent_name -> conversation_id -> messages
+            result = {}
+            for chat, agent in chat_histories:
+                if agent.name not in result:
+                    result[agent.name] = {}
+                
+                # Get conversation ID, use a default if not present
+                try:
+                    # For databases with conversation_id column
+                    conv_id = chat.conversation_id
+                except AttributeError:
+                    # For older database schemas without conversation_id
+                    conv_id = "default"
+                
+                # Get created_at, use a default if not present
+                try:
+                    created_at = chat.created_at.isoformat() if chat.created_at else None
+                except AttributeError:
+                    created_at = None
+                
+                # Store messages with metadata
+                result[agent.name][conv_id] = {
+                    'messages': chat.messages,
+                    'created_at': created_at
+                }
             
             return result
         finally:
