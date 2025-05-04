@@ -6,6 +6,10 @@ import streamlit as st
 import pandas as pd
 import db_manager
 import rag_system
+import csv_helper  # Add import for CSV helper functions
+import io  # For buffer operations with CSV data
+import datetime  # For formatting timestamps
+import traceback  # For error tracking
 
 def show_admin_page():
     """Display the admin page with tabs for different admin functions"""
@@ -17,7 +21,7 @@ def show_admin_page():
         return
     
     # Create tabs for different admin functions
-    tab1, tab2, tab3 = st.tabs(["Manage Agents", "Manage Users", "System Config"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Manage Agents", "Manage Users", "Chat History", "System Config"])
     
     with tab1:
         manage_agents()
@@ -26,6 +30,9 @@ def show_admin_page():
         manage_users()
     
     with tab3:
+        manage_chat_history()
+    
+    with tab4:
         system_config()
 
 def manage_agents():
@@ -192,6 +199,49 @@ def manage_users():
                     st.success(f"Password reset successfully for {reset_username}!")
                 except Exception as e:
                     st.error(f"Error resetting password: {e}")
+    
+    # Add CSV import/export section
+    st.subheader("CSV Import/Export")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("Import users from CSV")
+        uploaded_file = st.file_uploader("Choose a CSV file", type="csv", help="CSV must have 'username' and 'password' columns. 'role' column is optional.")
+        
+        if uploaded_file is not None:
+            if st.button("Import Users"):
+                import csv_helper
+                success_count, error_count, error_messages = csv_helper.import_users_from_csv(uploaded_file)
+                
+                if success_count > 0:
+                    st.success(f"Successfully imported {success_count} users.")
+                
+                if error_count > 0:
+                    with st.expander(f"Errors ({error_count})", expanded=True):
+                        for error in error_messages:
+                            st.error(error)
+                
+                if success_count > 0:
+                    # Force refresh to show new users
+                    st.rerun()
+    
+    with col2:
+        st.write("Export users to CSV")
+        if st.button("Export Users"):
+            import csv_helper
+            csv_data = csv_helper.export_users_to_csv()
+            
+            if csv_data:
+                # Offer download link
+                st.download_button(
+                    label="Download CSV",
+                    data=csv_data,
+                    file_name="users.csv",
+                    mime="text/csv",
+                )
+            else:
+                st.error("No users to export.")
 
 def system_config():
     """Admin function to configure system settings"""
@@ -224,3 +274,178 @@ def system_config():
     # Database connection information (read-only)
     st.subheader("Database Information")
     st.info("Database connection is configured via environment variables. If you need to change the database connection, update the environment variables and restart the application.")
+
+def manage_chat_history():
+    """Admin function to view and export chat history"""
+    st.header("Chat History Management")
+    
+    # Get a sample of recent chat history for display
+    try:
+        # First try the direct SQL approach
+        try:
+            # Get database session
+            from models import Session
+            session = Session()
+            
+            try:
+                # Query to get recent conversations with limited data
+                from sqlalchemy import text
+                
+                query = text("""
+                SELECT 
+                    u.username as user_username,
+                    a.name as agent_name,
+                    ch.conversation_id,
+                    ch.created_at,
+                    CASE 
+                        WHEN ch.messages IS NULL THEN 0
+                        WHEN ch.messages = '[]' THEN 0
+                        WHEN jsonb_typeof(ch.messages) = 'array' THEN jsonb_array_length(ch.messages)
+                        ELSE 0
+                    END as message_count
+                FROM 
+                    chat_history ch
+                    JOIN users u ON ch.user_id = u.id
+                    JOIN agents a ON ch.agent_id = a.id
+                ORDER BY
+                    ch.created_at DESC
+                LIMIT 50
+                """)
+                
+                result = session.execute(query)
+                
+                # Create data for display
+                chat_data = []
+                for row in result:
+                    # Format created_at
+                    created_at = row.created_at
+                    if created_at:
+                        formatted_date = created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        formatted_date = "Unknown"
+                    
+                    # Add to chat data
+                    chat_data.append({
+                        "User": row.user_username,
+                        "Agent": row.agent_name,
+                        "Conversation ID": row.conversation_id[:8] + "...",  # Truncate for display
+                        "Created At": formatted_date,
+                        "Messages": row.message_count
+                    })
+                
+                # Show data if available
+                if chat_data:
+                    st.subheader("Recent Conversations")
+                    st.dataframe(chat_data, use_container_width=True)
+                    return  # Exit the function if we successfully displayed data
+                
+            finally:
+                session.close()
+                
+        except Exception as e:
+            if st.session_state.debug_mode:
+                st.warning(f"Direct SQL approach failed: {e}")
+                st.code(traceback.format_exc())
+            # Continue to fallback method
+        
+        # Fallback method: Use ORM approach
+        try:
+            from models import Session, ChatHistory, User, Agent
+            session = Session()
+            
+            try:
+                # Query using SQLAlchemy ORM
+                chat_histories = (session.query(
+                    ChatHistory, User.username, Agent.name
+                )
+                .join(User, ChatHistory.user_id == User.id)
+                .join(Agent, ChatHistory.agent_id == Agent.id)
+                .order_by(ChatHistory.created_at.desc())
+                .limit(50)
+                .all())
+                
+                # Process results
+                chat_data = []
+                for chat, username, agent_name in chat_histories:
+                    # Format created_at
+                    created_at = chat.created_at
+                    if created_at:
+                        formatted_date = created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        formatted_date = "Unknown"
+                    
+                    # Count messages
+                    messages = chat.messages if chat.messages else []
+                    message_count = len(messages) if isinstance(messages, list) else 0
+                    
+                    # Add to chat data
+                    chat_data.append({
+                        "User": username,
+                        "Agent": agent_name,
+                        "Conversation ID": chat.conversation_id[:8] + "...",  # Truncate for display
+                        "Created At": formatted_date,
+                        "Messages": message_count
+                    })
+                
+                # Show data if available
+                if chat_data:
+                    st.subheader("Recent Conversations")
+                    st.dataframe(chat_data, use_container_width=True)
+                else:
+                    st.info("No chat history found.")
+                
+            finally:
+                session.close()
+                
+        except Exception as e:
+            if st.session_state.debug_mode:
+                st.warning(f"ORM approach failed: {e}")
+                st.code(traceback.format_exc())
+            
+            # Final fallback: Display a message
+            st.info("No chat history found or unable to retrieve chat history.")
+            
+    except Exception as e:
+        st.error(f"Error retrieving chat history: {e}")
+        if st.session_state.debug_mode:
+            st.code(traceback.format_exc())
+    
+    # Export section
+    st.subheader("Export Chat History")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.write("""
+        Export the complete chat history to a CSV file. The export includes:
+        - User information
+        - Agent information
+        - Conversation IDs
+        - Timestamps
+        - All messages with roles (user/assistant)
+        
+        Note: This operation might take some time if there are many conversations.
+        """)
+    
+    with col2:
+        if st.button("Export All Chat History", use_container_width=True):
+            with st.spinner("Exporting chat history..."):
+                csv_data = csv_helper.export_chat_history_to_csv()
+                
+                if csv_data:
+                    # Generate filename with current timestamp
+                    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"chat_history_export_{now}.csv"
+                    
+                    # Offer download
+                    st.download_button(
+                        label="Download CSV File",
+                        data=csv_data,
+                        file_name=filename,
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                    
+                    st.success("Chat history exported successfully!")
+                else:
+                    st.error("No chat history to export or an error occurred.")
