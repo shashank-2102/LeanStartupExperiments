@@ -64,9 +64,9 @@ def import_users_from_csv(csv_file):
                 continue
             
             # Validate password length
-            if len(password) < 6:
+            if len(password) < 1:
                 error_count += 1
-                error_messages.append(f"Skipped user '{username}': password must be at least 6 characters long")
+                error_messages.append(f"Skipped user '{username}': password must be at least 1 characters long")
                 continue
             
             # Validate role

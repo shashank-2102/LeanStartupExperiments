@@ -184,8 +184,8 @@ def manage_users():
         if st.button("Reset Password"):
             if reset_password != confirm_password:
                 st.error("Passwords don't match.")
-            elif len(reset_password) < 6:
-                st.error("Password must be at least 6 characters long.")
+            elif len(reset_password) < 1:
+                st.error("Password must be at least 1 characters long.")
             else:
                 try:
                     # Find the user and update password
