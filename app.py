@@ -176,7 +176,7 @@ def process_message(user_input, agent_chat_history, conversation_id):
     agent_chat_history.append({"role": "user", "content": user_input})
     
     try:
-        # Get the agent's system prompt
+        # GET THE PROMPT OF THE MAIN AGENT IN THE LANGGRAPH THAT IS IMPLEMENTED BY THE USER
         agents = db_manager.get_agents()
         agent_info = next((a for a in agents if a["name"] == st.session_state.current_agent), None)
         
@@ -186,7 +186,7 @@ def process_message(user_input, agent_chat_history, conversation_id):
             # Set waiting flag to display the "Thinking..." message
             st.session_state.waiting_for_response = True
             
-            # Get response from the agent
+            # GET RESPONSE FORM THE AGENT.PY THAT CONTAINS THE LANGGRAPH IMPLEMENTATION, WE PASS THE MAIN AGENT (DEFINED BY THE USER) TO BE USED IN THE LANGGRAPH.
             response = agent_module.get_agent_response(user_input, system_prompt, agent_chat_history)
             
             # Add agent response to chat history

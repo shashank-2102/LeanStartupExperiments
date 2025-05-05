@@ -1,3 +1,6 @@
+# Design the ORM model for the DB and connect to postgres via neon
+# Makes default main agents that will be used in the langchain implementation
+
 from sqlalchemy import Column, String, Integer, Text, ForeignKey, create_engine, MetaData, JSON, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker

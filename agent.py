@@ -1,10 +1,16 @@
 """
 Agent module for multi-agent chatbot system
-Handles communication with the OpenAI API
+Handles communication with the OpenAI API and implements LangGraph structure
 """
 import os
 from openai import OpenAI
 import db_manager
+from dotenv import load_dotenv
+from typing import Dict, List, Any, TypedDict
+from langgraph.graph import StateGraph, END
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize OpenAI client
 def get_openai_client():
@@ -20,9 +26,34 @@ def get_openai_client():
     # Return OpenAI client
     return OpenAI(api_key=api_key)
 
+def call_openai_api(client, messages, temperature=0.7, max_tokens=800):
+    """
+    Call the OpenAI API with the given messages
+    
+    Args:
+        client: The OpenAI client
+        messages: The messages to send to the API
+        temperature: The temperature to use for generation
+        max_tokens: The maximum number of tokens to generate
+        
+    Returns:
+        str: The API response
+    """
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=1.0,
+        frequency_penalty=0.0,
+        presence_penalty=0.0
+    )
+    
+    return response.choices[0].message.content
+
 def get_agent_response(user_input, system_prompt, chat_history):
     """
-    Get a response from the agent using the OpenAI API
+    Get a response from the agent using the OpenAI API with LangGraph structure
     
     Args:
         user_input (str): The user's input message
@@ -46,37 +77,145 @@ def get_agent_response(user_input, system_prompt, chat_history):
     try:
         client = get_openai_client()
         
-        # Create messages for API
-        messages = []
+        # Define the LangGraph state as a simple dictionary
+        state = {
+            "user_input": user_input,
+            "processed_input": "",
+            "primary_response": "",
+            "final_response": ""
+        }
         
-        # Add system prompt
-        messages.append({"role": "system", "content": system_prompt})
+        # === Input Checker Agent ===
+        def input_checker(state):
+            """Process the user input to make it clearer for the model"""
+            input_checker_prompt = """
+            You are an input processing specialist. Your task is to:
+            1. Analyze the user's input
+            2. Rephrase it to be clearer and more specific
+            3. Format it in a way that's optimized for AI processing
+            4. Maintain all important details from the original query
+            
+            Your output should be well-structured and include all the key information from the original input.
+            """
+            
+            # Create messages for input checker
+            messages = []
+            # Add context from chat history if available (last 3 messages for context)
+            if chat_history:
+                recent_context = chat_history[-3:] if len(chat_history) >= 3 else chat_history
+                for msg in recent_context:
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+            
+            # Add the system prompt for the input checker
+            messages = [{"role": "system", "content": input_checker_prompt}] + messages
+            
+            # Add user input
+            messages.append({"role": "user", "content": f"Process this user input: {state['user_input']}"})
+            
+            # Call the input checker agent
+            processed_input = call_openai_api(client, messages)
+            
+            # Update state
+            state["processed_input"] = processed_input
+            
+            return state
         
-        # Add chat history (except the last user message which we'll add separately)
-        if chat_history:
-            # Only include the most recent 10 messages to keep within token limits
-            recent_messages = chat_history[-10:-1] if len(chat_history) > 10 else chat_history[:-1]
-            for msg in recent_messages:
-                messages.append({"role": msg["role"], "content": msg["content"]})
+        # === Primary Agent ===
+        def primary_agent(state):
+            """Generate a response based on the processed input"""
+            # Create messages for primary agent
+            messages = []
+            
+            # Add chat history (except the last user message which we'll add separately)
+            if chat_history:
+                # Only include the most recent 10 messages to keep within token limits
+                recent_messages = chat_history[-10:-1] if len(chat_history) > 10 else chat_history[:-1]
+                for msg in recent_messages:
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+            
+            # Add the system prompt for the primary agent
+            messages = [{"role": "system", "content": system_prompt}] + messages
+            
+            # Add processed user input
+            messages.append({"role": "user", "content": state["processed_input"]})
+            
+            # Call the primary agent
+            response = call_openai_api(client, messages)
+            
+            # Update state
+            state["primary_response"] = response
+            
+            return state
         
-        # Add user input
-        messages.append({"role": "user", "content": user_input})
+        # === Output Checker Agent ===
+        def output_checker(state):
+            """Check if the response aligns with the user input and format it consistently"""
+            output_checker_prompt = """
+            You are a response quality specialist. Your task is to:
+            1. Analyze the user's original input and the AI's response
+            2. Verify that the response properly addresses the user's question/request
+            3. Check for accuracy, completeness, and relevance
+            4. Reformat the response to ensure consistency and clarity
+            
+            If the response doesn't align with the user's input, improve it.
+            If the response is appropriate, maintain it but ensure formatting consistency.
+            
+            Your final response should follow this format:
+            
+            ---
+            [Clear and concise response addressing the user's input]
+            [follow an informal tone but be professional at all times]
+            ---
+            
+            Ensure the response flows naturally and maintains a consistent style.
+            """
+            
+            # Create messages for output checker
+            messages = [
+                {"role": "system", "content": output_checker_prompt},
+                {"role": "user", "content": f"Original user input: {state['user_input']}\n\nAI response: {state['primary_response']}\n\nPlease check if this response aligns with the user's input and reformat if necessary."}
+            ]
+            
+            # Call the output checker agent
+            final_response = call_openai_api(client, messages)
+            
+            # Update state
+            state["final_response"] = final_response
+            
+            return state
         
-        # Get response from OpenAI API
-        # The newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-        # do not change this unless explicitly requested by the user
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=800,
-            top_p=1.0,
-            frequency_penalty=0.0,
-            presence_penalty=0.0
-        )
+        # Define the state schema
+        class AgentState(TypedDict):
+            user_input: str
+            processed_input: str
+            primary_response: str
+            final_response: str
         
-        # Return the response content
-        return response.choices[0].message.content
+        # Define the graph structure with schema
+        workflow = StateGraph(AgentState)
+        
+        # Add nodes to the graph
+        workflow.add_node("input_checker", input_checker)
+        workflow.add_node("primary_agent", primary_agent)
+        workflow.add_node("output_checker", output_checker)
+        
+        # Connect the nodes
+        workflow.add_edge("input_checker", "primary_agent")
+        workflow.add_edge("primary_agent", "output_checker")
+        workflow.add_edge("output_checker", END)
+        
+        # Set the entry point
+        workflow.set_entry_point("input_checker")
+        
+        # Compile the graph
+        graph = workflow.compile()
+        
+        # Run the workflow
+        final_state = graph.invoke(state)
+        
+        # Return the final response
+        return final_state["final_response"]
+        
     except Exception as e:
         # Handle API errors
         print(f"Error calling OpenAI API: {str(e)}")
