@@ -1,0 +1,32 @@
+# Core web application
+streamlit>=1.43.1
+
+# Database
+sqlalchemy>=2.0.38
+psycopg2-binary>=2.9.10
+
+# API integration
+openai>=1.63.2
+
+# Environment variables
+python-dotenv>=1.0.1
+
+# Data processing
+pandas>=2.2.3
+numpy>=1.26.4
+
+# Natural language processing & recommendations
+nltk>=3.9.1
+scikit-learn>=1.6.1
+
+# Date and time handling
+python-dateutil>=2.8.2
+
+# File operations
+openpyxl>=3.1.2
+
+# Utilities
+regex>=2023.10.3
+
+langchain>=0.0.1
+langgraph>=0.0.1
