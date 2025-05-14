@@ -80,9 +80,9 @@ def get_agent_response(user_input, system_prompt, chat_history):
         # Define the LangGraph state as a simple dictionary
         state = {
             "user_input": user_input,
-            "processed_input": "",
-            "primary_response": "",
-            "final_response": ""
+            "processed_input": "", # INPUT
+            "primary_response": "", #SPECIALISED AGENT
+            "final_response": "" # FORMATTING THE RESPONSE
         }
         
         # === Input Checker Agent ===
@@ -160,14 +160,7 @@ def get_agent_response(user_input, system_prompt, chat_history):
             If the response doesn't align with the user's input, improve it.
             If the response is appropriate, maintain it but ensure formatting consistency.
             
-            Your final response should follow this format:
-            
-            ---
-            [Clear and concise response addressing the user's input]
-            [follow an informal tone but be professional at all times]
-            ---
-            
-            Ensure the response flows naturally and maintains a consistent style.
+            Your final response should follow the format of ChatGPT interface. Only output the reformatted text.
             """
             
             # Create messages for output checker

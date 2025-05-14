@@ -299,12 +299,7 @@ def render_chat_page():
     if current_agent not in st.session_state.chat_history:
         st.session_state.chat_history[current_agent] = {}
     
-    if not isinstance(st.session_state.chat_history[current_agent], dict):
-        # Fix if it was incorrectly initialized as a list
-        old_history = st.session_state.chat_history[current_agent]
-        st.session_state.chat_history[current_agent] = {current_conv_id: old_history if isinstance(old_history, list) else []}
-        
-    # Now we can safely access or create the conversation
+    # Load chat history for the selected conversation
     if current_conv_id not in st.session_state.chat_history[current_agent]:
         # Try to load from database first
         try:
@@ -351,24 +346,9 @@ def render_chat_page():
             with st.chat_message("assistant"):
                 st.write("Thinking...")
     
-    # Debug info for admin users
-    if st.session_state.debug_mode and st.session_state.role == "admin":
-        with st.expander("Debug Information", expanded=False):
-            st.subheader("Session Information")
-            st.write(f"Username: {st.session_state.username}")
-            st.write(f"Role: {st.session_state.role}")
-            st.write(f"Current Agent: {st.session_state.current_agent}")
-            st.write(f"Current Conversation ID: {current_conv_id}")
-            
-            st.subheader("Chat History")
-            st.write(f"Messages in current chat: {len(agent_chat_history)}")
-            
-            # Display raw chat history
-            st.json(agent_chat_history)
-    
     # Check if there's a new message in the session state
     if st.session_state.new_message is not None:
-        # Process the message
+        # Process the message with the existing chat history
         debug_info = process_message(
             st.session_state.new_message, 
             agent_chat_history, 

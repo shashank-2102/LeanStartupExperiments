@@ -216,58 +216,58 @@ def add_agent(agent_data):
 # Chat history functions
 def save_chat_history(username, agent_name, conversation_id, chat_history):
     """Save chat history for a user, agent, and specific conversation"""
-    def _save_chat_history(username, agent_name, conversation_id, chat_history):
-        session = Session()
+    # def _save_chat_history(username, agent_name, conversation_id, chat_history):
+    session = Session()
+    try:
+        # Get user and agent
+        user = session.query(User).filter_by(username=username).first()
+        agent = session.query(Agent).filter_by(name=agent_name).first()
+        
+        if not user or not agent:
+            print(f"User {username} or Agent {agent_name} not found in database")
+            return False
+        
+        # Make sure chat_history is JSON serializable
         try:
-            # Get user and agent
-            user = session.query(User).filter_by(username=username).first()
-            agent = session.query(Agent).filter_by(name=agent_name).first()
-            
-            if not user or not agent:
-                print(f"User {username} or Agent {agent_name} not found in database")
-                return False
-            
-            # Make sure chat_history is JSON serializable
-            try:
-                json.dumps(chat_history)
-            except (TypeError, OverflowError) as e:
-                print(f"Error serializing chat history: {e}")
-                safe_chat_history = []
-                for msg in chat_history:
-                    safe_msg = {
-                        "role": str(msg.get("role", "")),
-                        "content": str(msg.get("content", ""))
-                    }
-                    safe_chat_history.append(safe_msg)
-                chat_history = safe_chat_history
-            
-            # Check if chat history for this conversation already exists
-            existing_chat = session.query(ChatHistory).filter_by(
-                user_id=user.id, agent_id=agent.id, conversation_id=conversation_id
-            ).first()
-            
-            if existing_chat:
-                # Update existing chat history
-                existing_chat.messages = chat_history
-            else:
-                # Create new chat history entry
-                new_chat = ChatHistory(
-                    user_id=user.id,
-                    agent_id=agent.id,
-                    conversation_id=conversation_id,
-                    messages=chat_history
-                )
-                session.add(new_chat)
-            
-            # Commit changes
-            session.commit()
-            return True
-        except Exception as e:
-            session.rollback()
-            print(f"Error in save_chat_history: {e}")
-            raise e
-        finally:
-            session.close()
+            json.dumps(chat_history)
+        except (TypeError, OverflowError) as e:
+            print(f"Error serializing chat history: {e}")
+            safe_chat_history = []
+            for msg in chat_history:
+                safe_msg = {
+                    "role": str(msg.get("role", "")),
+                    "content": str(msg.get("content", ""))
+                }
+                safe_chat_history.append(safe_msg)
+            chat_history = safe_chat_history
+        
+        # Check if chat history for this conversation already exists
+        existing_chat = session.query(ChatHistory).filter_by(
+            user_id=user.id, agent_id=agent.id, conversation_id=conversation_id
+        ).first()
+        
+        if existing_chat:
+            # Update existing chat history
+            existing_chat.messages = chat_history
+        else:
+            # Create new chat history entry
+            new_chat = ChatHistory(
+                user_id=user.id,
+                agent_id=agent.id,
+                conversation_id=conversation_id,
+                messages=chat_history
+            )
+            session.add(new_chat)
+        
+        # Commit changes
+        session.commit()
+        return True
+    except Exception as e:
+        session.rollback()
+        print(f"Error in save_chat_history: {e}")
+        raise e
+    finally:
+        session.close()
     
     try:
         return execute_with_retry(_save_chat_history, username, agent_name, conversation_id, chat_history)
@@ -275,42 +275,42 @@ def save_chat_history(username, agent_name, conversation_id, chat_history):
         print(f"Failed to save chat history after retries: {e}")
         return False
 
-def load_chat_history(username):
-    """Load chat history for a user"""
-    def _load_chat_history(username):
-        session = Session()
-        try:
-            # Get user
-            user = session.query(User).filter_by(username=username).first()
-            if not user:
-                print(f"User {username} not found when loading chat history")
-                return {}
+# def load_chat_history(username):
+#     """Load chat history for a user"""
+#     def _load_chat_history(username):
+#         session = Session()
+#         try:
+#             # Get user
+#             user = session.query(User).filter_by(username=username).first()
+#             if not user:
+#                 print(f"User {username} not found when loading chat history")
+#                 return {}
             
-            # Get all chat histories for this user
-            chat_histories = session.query(ChatHistory, Agent).join(Agent).filter(
-                ChatHistory.user_id == user.id
-            ).order_by(ChatHistory.created_at.desc()).all()
+#             # Get all chat histories for this user
+#             chat_histories = session.query(ChatHistory, Agent).join(Agent).filter(
+#                 ChatHistory.user_id == user.id
+#             ).order_by(ChatHistory.created_at.desc()).all()
             
-            # Convert to nested dictionary: agent_name -> conversation_id -> messages
-            result = {}
-            for chat, agent in chat_histories:
-                if agent.name not in result:
-                    result[agent.name] = {}
+#             # Convert to nested dictionary: agent_name -> conversation_id -> messages
+#             result = {}
+#             for chat, agent in chat_histories:
+#                 if agent.name not in result:
+#                     result[agent.name] = {}
                 
-                result[agent.name][chat.conversation_id] = {
-                    'messages': chat.messages,
-                    'created_at': chat.created_at.isoformat() if chat.created_at else None
-                }
+#                 result[agent.name][chat.conversation_id] = {
+#                     'messages': chat.messages,
+#                     'created_at': chat.created_at.isoformat() if chat.created_at else None
+#                 }
             
-            return result
-        finally:
-            session.close()
+#             return result
+#         finally:
+#             session.close()
     
-    try:
-        return execute_with_retry(_load_chat_history, username)
-    except Exception as e:
-        print(f"Failed to load chat history: {e}")
-        return {}
+#     try:
+#         return execute_with_retry(_load_chat_history, username)
+#     except Exception as e:
+#         print(f"Failed to load chat history: {e}")
+#         return {}
 
 def get_conversations(username, agent_name):
     """Get list of conversations for a user and agent"""
