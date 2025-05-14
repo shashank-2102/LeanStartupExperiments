@@ -84,6 +84,26 @@ def manage_agents():
                 st.rerun()
             except Exception as e:
                 st.error(f"Error updating agents: {e}")
+        
+        # Delete agent section
+        st.subheader("Delete Agent")
+        if agents:
+            agent_names = [agent["name"] for agent in agents]
+            agent_to_delete = st.selectbox("Select agent to delete:", agent_names)
+            
+            if st.button("Delete Agent", type="primary", use_container_width=False):
+                if agent_to_delete:
+                    # Get the index of the agent to delete
+                    agent_index = agent_names.index(agent_to_delete)
+                    
+                    # Add function to delete agent in db_manager
+                    if db_manager.delete_agent(agent_index):
+                        # Update RAG system with new agents
+                        rag_system.update_agent_knowledge()
+                        st.success(f"Agent '{agent_to_delete}' deleted successfully!")
+                        st.rerun()
+                    else:
+                        st.error(f"Error deleting agent '{agent_to_delete}'.")
     else:
         st.warning("No agents found in the database. Add your first agent below.")
     

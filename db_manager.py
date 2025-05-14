@@ -212,6 +212,44 @@ def add_agent(agent_data):
     except Exception as e:
         print(f"Failed to add agent: {e}")
         return False
+    
+def delete_agent(index):
+    """Delete an agent by index"""
+    def _delete_agent(index):
+        session = Session()
+        try:
+            # Get all agents (ordered by ID)
+            agents = session.query(Agent).order_by(Agent.id).all()
+            
+            # Check if index is valid
+            if 0 <= index < len(agents):
+                agent = agents[index]
+                
+                # First delete any chat history associated with this agent
+                # This is necessary due to foreign key constraints
+                chat_histories = session.query(ChatHistory).filter_by(agent_id=agent.id).all()
+                for chat in chat_histories:
+                    session.delete(chat)
+                
+                # Now delete the agent
+                session.delete(agent)
+                
+                # Commit changes
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"Error deleting agent: {e}")
+            raise e
+        finally:
+            session.close()
+    
+    try:
+        return execute_with_retry(_delete_agent, index)
+    except Exception as e:
+        print(f"Failed to delete agent: {e}")
+        return False
 
 # Chat history functions
 def save_chat_history(username, agent_name, conversation_id, chat_history):

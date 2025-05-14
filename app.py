@@ -34,6 +34,7 @@ if "authenticated" not in st.session_state:
     st.session_state.debug_mode = False
     st.session_state.waiting_for_response = False
     st.session_state.new_message = None
+    st.session_state.expanded_conversations = False  # Track if conversation list is expanded
     
 if "current_conversation_id" not in st.session_state:
     st.session_state.current_conversation_id = {}  # Will store {agent_name: conv_id}
@@ -92,7 +93,7 @@ def render_sidebar():
                     if selected_agent:
                         st.markdown(f"**{selected_agent['description']}**")
                     
-                    # Conversation management - add this here
+                    # Conversation management
                     st.subheader("Conversations")
                     
                     # New conversation button
@@ -102,6 +103,11 @@ def render_sidebar():
                         if current_agent not in st.session_state.chat_history:
                             st.session_state.chat_history[current_agent] = {}
                         st.session_state.chat_history[current_agent][new_id] = []
+                        
+                        # Initialize expanded conversations session state if not exists
+                        if "expanded_conversations" not in st.session_state:
+                            st.session_state.expanded_conversations = False
+                            
                         st.rerun()
                     
                     # List of existing conversations
@@ -111,9 +117,20 @@ def render_sidebar():
                     )
 
                     if conversations:
-                        st.write("Select a previous conversation:")
+                        # Initialize expanded conversations state if not exists
+                        if "expanded_conversations" not in st.session_state:
+                            st.session_state.expanded_conversations = False
                         
-                        for idx, conv in enumerate(conversations):
+                        # Show recent conversations (limited)
+                        st.write("Recent conversations:")
+                        
+                        # Determine how many conversations to show
+                        max_visible = 4  # Default number to show
+                        show_all = st.session_state.expanded_conversations
+                        visible_conversations = conversations if show_all else conversations[:max_visible]
+                        
+                        # Display conversations
+                        for idx, conv in enumerate(visible_conversations):
                             # Format date and show preview
                             created_date = conv.get('created_at', 'Unknown date')
                             if isinstance(created_date, str) and len(created_date) > 16:
@@ -135,12 +152,14 @@ def render_sidebar():
                                 st.session_state.current_conversation_id[current_agent] = conv['conversation_id']
                                 # The actual messages will be loaded in the next step
                                 st.rerun()
-                    
-                    # Clear chat button
-                    # if st.button("Clear Chat"):
-                    #     chat.clear_chat_history(st.session_state.current_agent)
-                    #     st.rerun()
                         
+                        # Show expand/collapse button if there are more than max_visible conversations
+                        if len(conversations) > max_visible:
+                            expand_text = "▼ Show all conversations" if not show_all else "▲ Show fewer conversations"
+                            if st.button(expand_text):
+                                st.session_state.expanded_conversations = not st.session_state.expanded_conversations
+                                st.rerun()
+                    
                     # Show agent recommendations toggle
                     st.session_state.show_agent_recommendation = st.toggle(
                         "Show agent recommendations",

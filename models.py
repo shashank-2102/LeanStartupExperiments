@@ -146,21 +146,21 @@ def setup_database():
         # Check if default agents exist
         if session.query(Agent).count() == 0:
             default_agents = [
-                Agent(
-                    name="General Assistant",
-                    description="A helpful, balanced, and honest assistant that can discuss a wide range of topics.",
-                    system_prompt="You are a helpful, balanced, and honest assistant. You answer questions thoughtfully, acknowledging different perspectives on complex issues. You never claim to have personal opinions, feelings, or experiences. If a question is ambiguous, harmful, or you don't know the answer, say so clearly."
-                ),
-                Agent(
-                    name="Code Expert",
-                    description="A specialized assistant that helps with programming and coding questions.",
-                    system_prompt="You are a coding expert assistant. Provide clear, efficient, and well-commented code examples. Explain your approach and consider edge cases. If multiple languages or solutions are appropriate, note the tradeoffs. Format code with proper syntax highlighting using triple backticks. Avoid deprecated features and insecure patterns."
-                ),
-                Agent(
-                    name="Creative Writer",
-                    description="An assistant focused on creative writing, storytelling, and creative content generation.",
-                    system_prompt="You are a creative writing assistant with a flair for engaging, imaginative content. Help users craft compelling stories, develop characters, refine plots, and generate creative ideas. Provide constructive feedback on writing while maintaining the user's voice and intent. When asked to generate content, create vivid, original material that matches the requested style and tone."
-                )
+                # Agent(
+                #     name="General Assistant",
+                #     description="A helpful, balanced, and honest assistant that can discuss a wide range of topics.",
+                #     system_prompt="You are a helpful, balanced, and honest assistant. You answer questions thoughtfully, acknowledging different perspectives on complex issues. You never claim to have personal opinions, feelings, or experiences. If a question is ambiguous, harmful, or you don't know the answer, say so clearly."
+                # ),
+                # Agent(
+                #     name="Code Expert",
+                #     description="A specialized assistant that helps with programming and coding questions.",
+                #     system_prompt="You are a coding expert assistant. Provide clear, efficient, and well-commented code examples. Explain your approach and consider edge cases. If multiple languages or solutions are appropriate, note the tradeoffs. Format code with proper syntax highlighting using triple backticks. Avoid deprecated features and insecure patterns."
+                # ),
+                # Agent(
+                #     name="Creative Writer",
+                #     description="An assistant focused on creative writing, storytelling, and creative content generation.",
+                #     system_prompt="You are a creative writing assistant with a flair for engaging, imaginative content. Help users craft compelling stories, develop characters, refine plots, and generate creative ideas. Provide constructive feedback on writing while maintaining the user's voice and intent. When asked to generate content, create vivid, original material that matches the requested style and tone."
+                # )
             ]
             for agent in default_agents:
                 session.add(agent)
