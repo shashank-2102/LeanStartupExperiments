@@ -191,9 +191,7 @@ def render_sidebar():
 
 # Function to process user input and get agent response
 def process_message(user_input, agent_chat_history, conversation_id):
-    # Add user message to chat history first - this will be displayed immediately
-    agent_chat_history.append({"role": "user", "content": user_input})
-    
+    # Note: User message is already added to chat history by this point
     try:
         # GET THE PROMPT OF THE MAIN AGENT IN THE LANGGRAPH THAT IS IMPLEMENTED BY THE USER
         agents = db_manager.get_agents()
@@ -201,9 +199,6 @@ def process_message(user_input, agent_chat_history, conversation_id):
         
         if agent_info:
             system_prompt = agent_info["system_prompt"]
-            
-            # Set waiting flag to display the "Thinking..." message
-            st.session_state.waiting_for_response = True
             
             # GET RESPONSE FORM THE AGENT.PY THAT CONTAINS THE LANGGRAPH IMPLEMENTATION, WE PASS THE MAIN AGENT (DEFINED BY THE USER) TO BE USED IN THE LANGGRAPH.
             response = agent_module.get_agent_response(user_input, system_prompt, agent_chat_history)
@@ -353,6 +348,19 @@ def render_chat_page():
         # Update the session state
         st.session_state.chat_history[current_agent][current_conv_id] = agent_chat_history
     
+    # Chat input - We move this up to capture the message first
+    user_input = st.chat_input("Type your message here...")
+    
+    if user_input and not st.session_state.waiting_for_response:
+        # Immediately add user message to chat history
+        user_message = {"role": "user", "content": user_input}
+        agent_chat_history.append(user_message)
+        
+        # Set waiting flag and store message for processing
+        st.session_state.waiting_for_response = True
+        st.session_state.new_message = user_input
+        st.rerun()  # Rerun to show the message and thinking indicator
+    
     # Create a container for the chat messages
     chat_container = st.container()
     
@@ -360,18 +368,18 @@ def render_chat_page():
     with chat_container:
         chat.display_chat_messages(agent_chat_history)
         
-        # If waiting for a response, show a spinner
+        # If waiting for a response, show a discrete 'thinking' indication
         if st.session_state.waiting_for_response:
             with st.chat_message("assistant"):
-                st.write("Thinking...")
+                st.write("⏳ Thinking...")
     
-    # Check if there's a new message in the session state
-    if st.session_state.new_message is not None:
-        # Process the message with the existing chat history
+    # Process the message if we're waiting for a response
+    if st.session_state.waiting_for_response and st.session_state.new_message is not None:
+        # Process the message
         debug_info = process_message(
             st.session_state.new_message, 
             agent_chat_history, 
-            current_conv_id)  # Pass conversation ID here
+            current_conv_id)
         
         # Clear the new message
         st.session_state.new_message = None
@@ -384,15 +392,7 @@ def render_chat_page():
             if other_recommendations:
                 st.info(f"💡 This query might also be suitable for: {', '.join(other_recommendations)}")
         
-        # Force a rerun to update the UI
-        st.rerun()
-    
-    # Chat input
-    user_input = st.chat_input("Type your message here...")
-    
-    if user_input:
-        # Store the message in session state to be processed after rerun
-        st.session_state.new_message = user_input
+        # Force a rerun to update the UI with the agent's response
         st.rerun()
 
 if __name__ == "__main__":
