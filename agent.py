@@ -51,7 +51,7 @@ def call_openai_api(client, messages, temperature=0.7, max_tokens=800):
     
     return response.choices[0].message.content
 
-def get_agent_response(user_input, system_prompt, chat_history):
+def get_agent_response(user_input, system_prompt, chat_history, username=None):
     """
     Get a response from the agent using the OpenAI API with LangGraph structure
     
@@ -59,6 +59,7 @@ def get_agent_response(user_input, system_prompt, chat_history):
         user_input (str): The user's input message
         system_prompt (str): The system prompt for the agent
         chat_history (list): The chat history
+        username (str, optional): The username of the current user
         
     Returns:
         str: The agent's response
@@ -69,6 +70,19 @@ def get_agent_response(user_input, system_prompt, chat_history):
     # Check if OpenAI API key is available
     config = db_manager.get_config()
     api_key = config.get("openai_api_key", "")
+    
+    # Check if the user has permission to use the API key
+    if username:
+        from models import Session, User
+        session = Session()
+        try:
+            user = session.query(User).filter_by(username=username).first()
+            if user and hasattr(user, 'can_use_api_key') and not user.can_use_api_key:
+                return "You don't have permission to use the OpenAI API. Please contact an administrator."
+        except Exception as e:
+            print(f"Error checking user API permission: {e}")
+        finally:
+            session.close()
     
     if not api_key and not os.environ.get("OPENAI_API_KEY"):
         return "No OpenAI API key is configured. Click the 'Configure OpenAI API Key' button in the sidebar to set up your API key."
@@ -85,6 +99,7 @@ def get_agent_response(user_input, system_prompt, chat_history):
             "final_response": "" # FORMATTING THE RESPONSE
         }
         
+        # Rest of the function remains the same
         # === Input Checker Agent ===
         def input_checker(state):
             """Process the user input to make it clearer for the model"""
@@ -208,6 +223,18 @@ def get_agent_response(user_input, system_prompt, chat_history):
         
         # Return the final response
         return final_state["final_response"]
+        
+    except Exception as e:
+        # Handle API errors
+        print(f"Error calling OpenAI API: {str(e)}")
+        
+        # Provide a more user-friendly error message
+        if "auth" in str(e).lower() or "api key" in str(e).lower():
+            return "Authentication error: The OpenAI API key may be invalid. Click the 'Configure OpenAI API Key' button in the sidebar to update your API key."
+        elif "timeout" in str(e).lower() or "connect" in str(e).lower():
+            return "Connection error: Could not connect to OpenAI's servers. Please check your internet connection and try again."
+        else:
+            return f"I'm sorry, I encountered an error when trying to respond: {str(e)}. Please try again later or contact support if the issue persists."
         
     except Exception as e:
         # Handle API errors

@@ -27,9 +27,12 @@ def import_users_from_csv(csv_file):
         if not all(col in df.columns for col in required_columns):
             return 0, 0, ["CSV must contain 'username' and 'password' columns"]
         
-        # Optional role column (default to 'user' if not present)
+        # Optional columns (default values if not present)
         if 'role' not in df.columns:
             df['role'] = 'user'
+        
+        if 'can_use_api_key' not in df.columns:
+            df['can_use_api_key'] = False
         
         # Process each row
         success_count = 0
@@ -44,6 +47,13 @@ def import_users_from_csv(csv_file):
             username = str(row['username']).strip()
             password = str(row['password']).strip()
             role = str(row['role']).strip().lower()
+            
+            # Handle can_use_api_key - convert to boolean
+            can_use_api_key = row.get('can_use_api_key', False)
+            if isinstance(can_use_api_key, str):
+                can_use_api_key = can_use_api_key.lower() in ['true', 'yes', '1', 't', 'y']
+            else:
+                can_use_api_key = bool(can_use_api_key)
             
             # Validate username and password
             if not username or not password:
@@ -77,7 +87,8 @@ def import_users_from_csv(csv_file):
             user_data = {
                 "username": username,
                 "password": password,
-                "role": role
+                "role": role,
+                "can_use_api_key": can_use_api_key
             }
             
             if db_manager.add_user(user_data):

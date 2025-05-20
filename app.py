@@ -201,7 +201,13 @@ def process_message(user_input, agent_chat_history, conversation_id):
             system_prompt = agent_info["system_prompt"]
             
             # GET RESPONSE FORM THE AGENT.PY THAT CONTAINS THE LANGGRAPH IMPLEMENTATION, WE PASS THE MAIN AGENT (DEFINED BY THE USER) TO BE USED IN THE LANGGRAPH.
-            response = agent_module.get_agent_response(user_input, system_prompt, agent_chat_history)
+            # Pass the username to check permissions
+            response = agent_module.get_agent_response(
+                user_input, 
+                system_prompt, 
+                agent_chat_history,
+                st.session_state.username  # Pass username to check API key permissions
+            )
             
             # Add agent response to chat history
             agent_chat_history.append({"role": "assistant", "content": response})

@@ -52,7 +52,29 @@ def execute_with_retry(func, *args, **kwargs):
                 print(f"Failed after {max_tries} attempts: {e}")
                 raise  # Re-raise the last exception
 
-# User management functions
+
+
+def debug_user_permissions():
+    """Debug helper to print user permissions directly from database"""
+    session = Session()
+    try:
+        users = session.query(User).all()
+        user_info = []
+        for user in users:
+            has_attr = hasattr(user, 'can_use_api_key')
+            can_use_api = getattr(user, 'can_use_api_key', None) if has_attr else "N/A"
+            user_info.append({
+                "username": user.username,
+                "role": user.role,
+                "has_can_use_api_key_attr": has_attr,
+                "can_use_api_key": can_use_api,
+                "can_use_api_key_type": type(can_use_api).__name__
+            })
+        return user_info
+    finally:
+        session.close()
+        
+
 def get_users():
     """Get list of users"""
     def _get_users():
@@ -60,7 +82,9 @@ def get_users():
         try:
             users = session.query(User).all()
             # Convert to list of dictionaries for compatibility with existing code
-            return [{"username": user.username, "password": user.password, "role": user.role} for user in users]
+            return [{"username": user.username, "password": user.password, "role": user.role, 
+                    "can_use_api_key": user.can_use_api_key if hasattr(user, 'can_use_api_key') else False} 
+                    for user in users]
         finally:
             session.close()
     
@@ -84,7 +108,8 @@ def add_user(user_data):
             new_user = User(
                 username=user_data["username"],
                 password=user_data["password"],
-                role=user_data["role"]
+                role=user_data["role"],
+                can_use_api_key=user_data.get("can_use_api_key", False)
             )
             session.add(new_user)
             session.commit()
@@ -101,20 +126,30 @@ def add_user(user_data):
         print(f"Failed to add user: {e}")
         return False
 
-def update_users(users_list):
-    """Update users from list of dictionaries"""
-    def _update_users(users_list):
+def update_users(users_df):
+    """Update users from a pandas DataFrame"""
+    def _update_users(users_df):
         session = Session()
         try:
             # Get all current users
             current_users = {user.username: user for user in session.query(User).all()}
             
             # Update existing users
-            for user_data in users_list:
-                if user_data["username"] in current_users:
-                    user = current_users[user_data["username"]]
-                    user.password = user_data["password"]
-                    user.role = user_data["role"]
+            for _, row in users_df.iterrows():
+                username = row["username"]
+                if username in current_users:
+                    user = current_users[username]
+                    user.password = row["password"]
+                    user.role = row["role"]
+                    
+                    # Handle can_use_api_key - check if the column exists
+                    if hasattr(user, 'can_use_api_key') and "can_use_api_key" in row:
+                        # Ensure boolean conversion for the can_use_api_key field
+                        can_use_api_key = row.get("can_use_api_key", False)
+                        if isinstance(can_use_api_key, str):
+                            can_use_api_key = can_use_api_key.lower() in ['true', 'yes', '1', 't', 'y']
+                        user.can_use_api_key = bool(can_use_api_key)
+                        print(f"Updating user {username} can_use_api_key to {user.can_use_api_key}")
             
             # Commit changes
             session.commit()
@@ -126,10 +161,11 @@ def update_users(users_list):
             session.close()
     
     try:
-        return execute_with_retry(_update_users, users_list)
+        return execute_with_retry(_update_users, users_df)
     except Exception as e:
         print(f"Failed to update users: {e}")
         return False
+
 
 # Agent management functions
 def get_agents():

@@ -1,7 +1,7 @@
 # Design the ORM model for the DB and connect to postgres via neon
 # Makes default main agents that will be used in the langchain implementation
 
-from sqlalchemy import Column, String, Integer, Text, ForeignKey, create_engine, MetaData, JSON, DateTime
+from sqlalchemy import Column, String, Integer, Text, ForeignKey, create_engine, MetaData, JSON, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 import os
@@ -18,6 +18,7 @@ load_dotenv()
 Base = declarative_base()
 
 # Define ORM models
+
 class User(Base):
     __tablename__ = 'users'
 
@@ -25,10 +26,10 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False)
     password = Column(String(100), nullable=False)
     role = Column(String(20), default='user')
+    can_use_api_key = Column(Boolean, default=False)  # New column for API key access permission
     
     # One-to-many relationship with ChatHistory
     chats = relationship("ChatHistory", back_populates="user", cascade="all, delete-orphan")
-
 class Agent(Base):
     __tablename__ = 'agents'
     
