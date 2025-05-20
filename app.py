@@ -200,17 +200,37 @@ def process_message(user_input, agent_chat_history, conversation_id):
         if agent_info:
             system_prompt = agent_info["system_prompt"]
             
-            # GET RESPONSE FORM THE AGENT.PY THAT CONTAINS THE LANGGRAPH IMPLEMENTATION, WE PASS THE MAIN AGENT (DEFINED BY THE USER) TO BE USED IN THE LANGGRAPH.
-            # Pass the username to check permissions
-            response = agent_module.get_agent_response(
+            # Create a placeholder for the streaming response
+            streaming_placeholder = st.chat_message("assistant")
+            full_response = ""
+            streaming_container = streaming_placeholder.empty()
+            
+            # Get streamed response from agent
+            response_stream = agent_module.get_agent_response(
                 user_input, 
                 system_prompt, 
                 agent_chat_history,
-                st.session_state.username  # Pass username to check API key permissions
+                st.session_state.username,  # Pass username to check API key permissions
+                stream=True  # Enable streaming
             )
             
-            # Add agent response to chat history
-            agent_chat_history.append({"role": "assistant", "content": response})
+            # For non-streaming fallback (errors, permissions, etc.)
+            if isinstance(response_stream, str):
+                # Handle error messages or other string responses
+                full_response = response_stream
+                streaming_container.write(full_response)
+            else:
+                # Process the streaming response
+                for chunk in response_stream:
+                    if hasattr(chunk.choices[0].delta, "content"):
+                        content = chunk.choices[0].delta.content
+                        if content:
+                            full_response += content
+                            # Update the placeholder with the accumulated response
+                            streaming_container.write(full_response)
+                
+            # After streaming is complete, add the full response to chat history
+            agent_chat_history.append({"role": "assistant", "content": full_response})
             
             # Save chat history to database
             if st.session_state.authenticated and st.session_state.username:
@@ -236,6 +256,10 @@ def process_message(user_input, agent_chat_history, conversation_id):
         # Add error message to chat history
         error_message = f"I'm sorry, I encountered an error: {str(e)}"
         agent_chat_history.append({"role": "assistant", "content": error_message})
+        
+        # Display the error message
+        with st.chat_message("assistant"):
+            st.write(error_message)
         
         # Reset waiting flag
         st.session_state.waiting_for_response = False
@@ -354,7 +378,14 @@ def render_chat_page():
         # Update the session state
         st.session_state.chat_history[current_agent][current_conv_id] = agent_chat_history
     
-    # Chat input - We move this up to capture the message first
+    # Create a container for the chat messages
+    chat_container = st.container()
+    
+    # Display chat messages
+    with chat_container:
+        chat.display_chat_messages(agent_chat_history)
+    
+    # Chat input
     user_input = st.chat_input("Type your message here...")
     
     if user_input and not st.session_state.waiting_for_response:
@@ -362,33 +393,18 @@ def render_chat_page():
         user_message = {"role": "user", "content": user_input}
         agent_chat_history.append(user_message)
         
-        # Set waiting flag and store message for processing
-        st.session_state.waiting_for_response = True
-        st.session_state.new_message = user_input
-        st.rerun()  # Rerun to show the message and thinking indicator
-    
-    # Create a container for the chat messages
-    chat_container = st.container()
-    
-    # Display chat messages
-    with chat_container:
-        chat.display_chat_messages(agent_chat_history)
+        # Display the updated chat history with the new user message
+        with chat_container:
+            chat.display_chat_messages(agent_chat_history)
         
-        # If waiting for a response, show a discrete 'thinking' indication
-        if st.session_state.waiting_for_response:
-            with st.chat_message("assistant"):
-                st.write("⏳ Thinking...")
-    
-    # Process the message if we're waiting for a response
-    if st.session_state.waiting_for_response and st.session_state.new_message is not None:
-        # Process the message
+        # Set waiting flag
+        st.session_state.waiting_for_response = True
+        
+        # Process the message immediately
         debug_info = process_message(
-            st.session_state.new_message, 
+            user_input, 
             agent_chat_history, 
             current_conv_id)
-        
-        # Clear the new message
-        st.session_state.new_message = None
         
         # Show agent recommendations if available
         if debug_info and st.session_state.show_agent_recommendation:
@@ -398,8 +414,8 @@ def render_chat_page():
             if other_recommendations:
                 st.info(f"💡 This query might also be suitable for: {', '.join(other_recommendations)}")
         
-        # Force a rerun to update the UI with the agent's response
-        st.rerun()
+        # Reset waiting flag
+        st.session_state.waiting_for_response = False
 
 if __name__ == "__main__":
     main()

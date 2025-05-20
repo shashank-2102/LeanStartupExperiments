@@ -26,7 +26,7 @@ def get_openai_client():
     # Return OpenAI client
     return OpenAI(api_key=api_key)
 
-def call_openai_api(client, messages, temperature=0.7, max_tokens=800):
+def call_openai_api(client, messages, temperature=0.7, max_tokens=800, stream=False):
     """
     Call the OpenAI API with the given messages
     
@@ -35,9 +35,11 @@ def call_openai_api(client, messages, temperature=0.7, max_tokens=800):
         messages: The messages to send to the API
         temperature: The temperature to use for generation
         max_tokens: The maximum number of tokens to generate
+        stream: Whether to stream the response
         
     Returns:
-        str: The API response
+        If stream=False: str: The API response
+        If stream=True: Generator yielding chunks of the response
     """
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -46,12 +48,19 @@ def call_openai_api(client, messages, temperature=0.7, max_tokens=800):
         max_tokens=max_tokens,
         top_p=1.0,
         frequency_penalty=0.0,
-        presence_penalty=0.0
+        presence_penalty=0.0,
+        stream=stream
     )
+    
+    if not stream:
+        return response.choices[0].message.content
+    else:
+        # Return the streaming response generator directly
+        return response
     
     return response.choices[0].message.content
 
-def get_agent_response(user_input, system_prompt, chat_history, username=None):
+def get_agent_response(user_input, system_prompt, chat_history, username=None, stream=False):
     """
     Get a response from the agent using the OpenAI API with LangGraph structure
     
@@ -60,9 +69,11 @@ def get_agent_response(user_input, system_prompt, chat_history, username=None):
         system_prompt (str): The system prompt for the agent
         chat_history (list): The chat history
         username (str, optional): The username of the current user
+        stream (bool, optional): Whether to stream the response
         
     Returns:
-        str: The agent's response
+        If stream=False: str: The agent's response
+        If stream=True: Generator yielding chunks of the response
     """
     if not system_prompt:
         system_prompt = "You are a helpful assistant."
@@ -91,6 +102,33 @@ def get_agent_response(user_input, system_prompt, chat_history, username=None):
     try:
         client = get_openai_client()
         
+        # For streaming, we'll use a simplified approach instead of the full LangGraph
+        # because it's difficult to stream through multiple agents
+        if stream:
+            # Create messages for primary agent, including chat history
+            messages = []
+            
+            # Add chat history (except the last user message which we'll add separately)
+            if chat_history:
+                # Only include the most recent 10 messages to keep within token limits
+                recent_messages = chat_history[-10:] if len(chat_history) > 10 else chat_history
+                for msg in recent_messages:
+                    if msg["role"] != "system":  # Skip old system messages
+                        messages.append({"role": msg["role"], "content": msg["content"]})
+            
+            # Add the system prompt
+            messages = [{"role": "system", "content": system_prompt}] + messages
+            
+            # Replace the last user message or add it if not present
+            if messages and messages[-1]["role"] == "user":
+                messages[-1]["content"] = user_input
+            else:
+                messages.append({"role": "user", "content": user_input})
+            
+            # Call the OpenAI API with streaming enabled
+            return call_openai_api(client, messages, stream=True)
+        
+        # Original LangGraph implementation for non-streaming
         # Define the LangGraph state as a simple dictionary
         state = {
             "user_input": user_input,
@@ -223,18 +261,6 @@ def get_agent_response(user_input, system_prompt, chat_history, username=None):
         
         # Return the final response
         return final_state["final_response"]
-        
-    except Exception as e:
-        # Handle API errors
-        print(f"Error calling OpenAI API: {str(e)}")
-        
-        # Provide a more user-friendly error message
-        if "auth" in str(e).lower() or "api key" in str(e).lower():
-            return "Authentication error: The OpenAI API key may be invalid. Click the 'Configure OpenAI API Key' button in the sidebar to update your API key."
-        elif "timeout" in str(e).lower() or "connect" in str(e).lower():
-            return "Connection error: Could not connect to OpenAI's servers. Please check your internet connection and try again."
-        else:
-            return f"I'm sorry, I encountered an error when trying to respond: {str(e)}. Please try again later or contact support if the issue persists."
         
     except Exception as e:
         # Handle API errors
