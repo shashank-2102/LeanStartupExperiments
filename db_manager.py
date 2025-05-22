@@ -386,6 +386,65 @@ def save_chat_history(username, agent_name, conversation_id, chat_history):
 #         print(f"Failed to load chat history: {e}")
 #         return {}
 
+def get_unified_conversations(username):
+    """Get list of all conversations for a user (unified across agents)"""
+    def _get_unified_conversations(username):
+        session = Session()
+        try:
+            # Get user
+            user = session.query(User).filter_by(username=username).first()
+            if not user:
+                return []
+            
+            # Get all conversations for this user, ordered by most recent
+            conversations = session.query(ChatHistory).filter_by(
+                user_id=user.id
+            ).order_by(ChatHistory.created_at.desc()).all()
+            
+            # Convert to list of dicts with conversation info
+            result = []
+            for conv in conversations:
+                # Get agent info
+                agent = session.query(Agent).filter_by(id=conv.agent_id).first()
+                agent_name = agent.name if agent else "Unknown Agent"
+                
+                # Count total messages and get preview
+                message_count = len(conv.messages) if conv.messages else 0
+                preview = ""
+                agents_used = set()
+                
+                if conv.messages:
+                    # Get first user message as preview
+                    for msg in conv.messages:
+                        if msg.get("role") == "user" and msg.get("content"):
+                            preview = msg["content"][:50] + "..." if len(msg["content"]) > 50 else msg["content"]
+                            break
+                    
+                    # Count unique agents used in this conversation
+                    for msg in conv.messages:
+                        if msg.get("role") == "assistant" and msg.get("agent"):
+                            agents_used.add(msg["agent"])
+                
+                result.append({
+                    'conversation_id': conv.conversation_id,
+                    'created_at': conv.created_at.isoformat() if conv.created_at else None,
+                    'message_count': message_count,
+                    'preview': preview,
+                    'primary_agent': agent_name,
+                    'agents_used': list(agents_used),
+                    'multi_agent': len(agents_used) > 1
+                })
+            
+            return result
+        finally:
+            session.close()
+    
+    try:
+        return execute_with_retry(_get_unified_conversations, username)
+    except Exception as e:
+        print(f"Failed to get unified conversations: {e}")
+        return []
+
 def get_conversations(username, agent_name):
     """Get list of conversations for a user and agent"""
     def _get_conversations(username, agent_name):
@@ -479,6 +538,38 @@ def load_chat_history(username):
     except Exception as e:
         print(f"Failed to load chat history: {e}")
         return {}  # Return empty dict if all attempts fail
+    
+def load_conversation_by_id(username, conversation_id):
+    """Load a specific conversation by ID"""
+    def _load_conversation_by_id(username, conversation_id):
+        session = Session()
+        try:
+            # Get user
+            user = session.query(User).filter_by(username=username).first()
+            if not user:
+                return None
+            
+            # Get the specific conversation
+            chat = session.query(ChatHistory).filter_by(
+                user_id=user.id, conversation_id=conversation_id
+            ).first()
+            
+            if chat:
+                return {
+                    'messages': chat.messages,
+                    'created_at': chat.created_at.isoformat() if chat.created_at else None,
+                    'conversation_id': chat.conversation_id
+                }
+            return None
+        finally:
+            session.close()
+    
+    try:
+        return execute_with_retry(_load_conversation_by_id, username, conversation_id)
+    except Exception as e:
+        print(f"Failed to load conversation {conversation_id}: {e}")
+        return None
+
 
 # Config functions
 def get_config():
