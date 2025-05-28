@@ -2,6 +2,9 @@
 
 This guide will help you implement the fixes to ensure your chat history persists in the Neon PostgreSQL database and messages display immediately in the conversation when using Streamlit directly (without Docker).
 
+https://github.com/user-attachments/assets/3d734714-18ea-442d-8894-2883f25fa455
+
+
 ## Setup Instructions
 
 ### 1. Install Required Packages
