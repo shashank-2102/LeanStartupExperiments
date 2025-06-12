@@ -10,11 +10,12 @@ from evidently.future.tests import *
 from office365.runtime.auth.authentication_context import AuthenticationContext
 from office365.sharepoint.client_context import ClientContext
 from office365.sharepoint.files.file import File
-from evidently.ui.workspace.cloud import CloudWorkspace
+# from evidently.ui.workspace.cloud import CloudWorkspace
 from office365.graph_client import GraphClient
 import sys
 from dotenv import load_dotenv
 import json
+import pprint
 
 load_dotenv()
 
@@ -43,6 +44,5 @@ report = Report([
     MaxValue(column="Length", tests=[lte(150)]),
     CategoryCount(column="Denials", category="DECLINE", tests=[eq(0)])
 ])
-
-# print(json.dumps(report.run(eval_dataset, None).json(), indent=4))
+pprint.pprint(report.run(eval_dataset, None).json())
 

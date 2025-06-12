@@ -1,0 +1,137 @@
+{
+    "metrics": [
+      {
+        "id": "00404ffe284d7862baa4095093452630",
+        "metric_id": "RowCount()",
+        "value": 7.0
+      },
+      {
+        "id": "eb8c3cb27e2c604b0c32666d010814c2",
+        "metric_id": "MinValue(column=Sentiment)",
+        "value": 0.7205
+      },
+      {
+        "id": "0caa947a541fad7505d946558bdbd6aa",
+        "metric_id": "MaxValue(column=Length)",
+        "value": 3345.0
+      },
+      {
+        "id": "de658b2cc6c849c6404fa0338c11c82d",
+        "metric_id": "CategoryCount(column=Denials,categories=DECLINE)",
+        "value": {
+          "count": 1.0,
+          "share": 0.14285714285714285
+        }
+      }
+    ],
+    "tests": [
+      {
+        "id": "ge",
+        "name": "Minimal value of Sentiment: Greater or Equal 0.000",
+        "description": "Minimal value of Sentiment: Actual value 0.721 >= 0.000",
+        "metric_config": {
+          "metric_id": "eb8c3cb27e2c604b0c32666d010814c2",
+          "params": {
+            "type": "evidently:metric_v2:MinValue",
+            "tests": [
+              {
+                "type": "evidently:test_v2:GreaterOrEqualMetricTest",
+                "is_critical": true,
+                "threshold": 0.0
+              }
+            ],
+            "column": "Sentiment"
+          }
+        },
+        "test_config": {
+          "type": "evidently:test_v2:GreaterOrEqualMetricTest",
+          "is_critical": true,
+          "threshold": 0.0
+        },
+        "status": "SUCCESS",
+        "bound_test": {
+          "type": "evidently:bound_test:SingleValueBoundTest",
+          "test": {
+            "type": "evidently:test_v2:GreaterOrEqualMetricTest",
+            "is_critical": true,
+            "threshold": 0.0
+          },
+          "metric_fingerprint": "eb8c3cb27e2c604b0c32666d010814c2"
+        }
+      },
+      {
+        "id": "le",
+        "name": "Maximum value of Length: Less or Equal 150.000",
+        "description": "Maximum value of Length: Actual value 3345.000 >= 150.000",
+        "metric_config": {
+          "metric_id": "0caa947a541fad7505d946558bdbd6aa",
+          "params": {
+            "type": "evidently:metric_v2:MaxValue",
+            "tests": [
+              {
+                "type": "evidently:test_v2:LessOrEqualMetricTest",
+                "is_critical": true,
+                "threshold": 150.0
+              }
+            ],
+            "column": "Length"
+          }
+        },
+        "test_config": {
+          "type": "evidently:test_v2:LessOrEqualMetricTest",
+          "is_critical": true,
+          "threshold": 150.0
+        },
+        "status": "FAIL",
+        "bound_test": {
+          "type": "evidently:bound_test:SingleValueBoundTest",
+          "test": {
+            "type": "evidently:test_v2:LessOrEqualMetricTest",
+            "is_critical": true,
+            "threshold": 150.0
+          },
+          "metric_fingerprint": "0caa947a541fad7505d946558bdbd6aa"
+        }
+      },
+      {
+        "id": "eq",
+        "name": "Column 'Denials' categories 'DECLINE': Equal 0.000",
+        "description": "Column 'Denials' categories 'DECLINE': Actual value 1.000 , but expected 0.000",
+        "metric_config": {
+          "metric_id": "de658b2cc6c849c6404fa0338c11c82d",
+          "params": {
+            "type": "evidently:metric_v2:CategoryCount",
+            "tests": [
+              {
+                "type": "evidently:test_v2:EqualMetricTest",
+                "is_critical": true,
+                "expected": 0.0
+              }
+            ],
+            "share_tests": null,
+            "column": "Denials",
+            "category": null,
+            "categories": [
+              "DECLINE"
+            ]
+          }
+        },
+        "test_config": {
+          "type": "evidently:test_v2:EqualMetricTest",
+          "is_critical": true,
+          "expected": 0.0
+        },
+        "status": "FAIL",
+        "bound_test": {
+          "type": "evidently:bound_test:CountBoundTest",
+          "test": {
+            "type": "evidently:test_v2:EqualMetricTest",
+            "is_critical": true,
+            "expected": 0.0
+          },
+          "metric_fingerprint": "de658b2cc6c849c6404fa0338c11c82d",
+          "is_count": true
+        }
+      }
+    ]
+  }
